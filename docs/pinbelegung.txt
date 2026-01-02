@@ -1,0 +1,33 @@
+ESP32 PINBELEGUNG - VOLLSTÄNDIG
+================================
+
+┌─────────────────────────────────────────────────────────┐
+│              ESP32 DevKit V1                            │
+├───────────┬─────────────────────────────────────────────┤
+│ Pin       │ Funktion                                    │
+├───────────┼─────────────────────────────────────────────┤
+│ 3V3       │ I2C Stromversorgung (4x INA219)             │
+│ GND       │ Masse (MEHRFACH verbinden!)                 │
+│ GPIO13    │ I2C SDA                                     │
+│ GPIO12    │ I2C SCL                                     │
+│ GPIO25    │ RPWM_ALL (gemeinsam für alle 4 BTS7960)    │
+│ GPIO26    │ LPWM_ALL (gemeinsam für alle 4 BTS7960)    │
+│ GPIO27    │ Motor 1 R_EN                                │
+│ GPIO14    │ Motor 1 L_EN                                │
+│ GPIO32    │ Motor 2 R_EN                                │
+│ GPIO33    │ Motor 2 L_EN                                │
+│ GPIO16    │ Motor 3 R_EN                                │
+│ GPIO17    │ Motor 3 L_EN                                │
+│ GPIO19    │ Motor 4 R_EN                                │
+│ GPIO21    │ Motor 4 L_EN                                │
+│ GPIO22    │ Taster M1 AUF                               │
+│ GPIO23    │ Taster M1 ZU                                │
+│ GPIO4     │ Taster M2 AUF                               │
+│ GPIO5     │ Taster M2 ZU                                │
+│ GPIO18    │ Taster M3 AUF                               │
+│ GPIO15    │ Taster M3 ZU                                │
+│ GPIO2     │ Taster M4 AUF (Board LED!)                  │
+│ GPIO0     │ Taster M4 ZU (Boot Button!)                 │
+└───────────┴─────────────────────────────────────────────┘
+
+ALLE 26 GPIOs BELEGT! (Optimal ausgenutzt)

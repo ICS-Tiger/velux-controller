@@ -1,0 +1,21 @@
+STÜCKLISTE
+==========
+
+Elektronik:
+-----------
+ESP32 DevKit V1         1x      5 EUR
+BTS7960 (IBT-2)         4x      4 EUR/Stk
+INA219 Stromsensor      4x      2 EUR/Stk
+5V Netzteil USB         1x      5 EUR
+Taster (NO)             8x      0.50 EUR/Stk
+Verteilerblock 12pol    2x      2 EUR/Stk
+
+Kabel & Montage:
+----------------
+Kabel 1.5mm²           20m     10 EUR
+Litze 0.25mm²          10m      3 EUR
+Gehäuse IP54            1x      5 EUR
+Schrumpfschlauch        1m      2 EUR
+Aderendhülsen          50x      5 EUR
+
+GESAMT: ca. 65 EUR
