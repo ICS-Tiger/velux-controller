@@ -31,26 +31,18 @@
 #define M4_R_EN 19
 #define M4_L_EN 21
 
-// ===== Taster =====
-#define BTN_M1_OPEN 22
-#define BTN_M1_CLOSE 23
-#define BTN_M2_OPEN 4
-#define BTN_M2_CLOSE 5
-#define BTN_M3_OPEN 18
-#define BTN_M3_CLOSE 15
-#define BTN_M4_OPEN 2
-#define BTN_M4_CLOSE 0
+// ===== Analoges Keypad (16 Tasten an einem ADC-Pin) =====
+#define KEYPAD_PIN 34
+#define KEYPAD_DEBOUNCE_MS 50
+#define KEYPAD_READ_INTERVAL 50
 
-#define BUTTON_DEBOUNCE_MS 50
-#define BUTTON_LONG_PRESS_MS 1000
-
-// ===== Strommessung =====
-#define I2C_SDA 13
-#define I2C_SCL 12
-#define INA219_ADDR_M1 0x40
-#define INA219_ADDR_M2 0x41
-#define INA219_ADDR_M3 0x44
-#define INA219_ADDR_M4 0x45
+// Tastenbelegung:
+// 0-3: Motor 1-4 AUF
+// 4-7: Motor 1-4 ZU  
+// 8-11: Motor 1-4 STOP
+// 12: Alle AUF
+// 13: Alle ZU
+// 14-15: Reserve
 
 // ===== Webserver =====
 #define WEB_SERVER_PORT 80

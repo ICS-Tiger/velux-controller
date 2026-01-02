@@ -3,7 +3,6 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
-#include <Adafruit_INA219.h>
 
 enum MotorState {
     STOPPED,
@@ -36,19 +35,14 @@ private:
     unsigned long moveStartTime;
     unsigned long lastPositionUpdate;
     
-    Adafruit_INA219 *currentSensor;
-    float maxCurrent;
-    float currentThreshold;
-    
     bool isCalibrated;
     Preferences prefs;
     
     void updatePosition();
-    void checkCurrentLimit();
     void applyMotorControl(MotorDirection dir);
     
 public:
-    MotorController(uint8_t motorId, uint8_t ren, uint8_t len, uint8_t i2cAddr);
+    MotorController(uint8_t motorId, uint8_t rEN, uint8_t lEN);
     
     void begin();
     void loop();
@@ -69,11 +63,9 @@ public:
     bool getCalibrated() { return isCalibrated; }
     unsigned long getOpenTime() { return openTime; }
     unsigned long getCloseTime() { return closeTime; }
-    float getCurrent();
     bool isMoving() { return state != STOPPED; }
     
     void setPosition(uint8_t pos) { currentPosition = pos; }
-    void setCurrentThreshold(float threshold) { currentThreshold = threshold; }
     
     void saveConfig();
     void loadConfig();

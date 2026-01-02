@@ -54,7 +54,7 @@ void WebServerHandler::begin() {
                 "<button class=\"btn-close\" onclick=\"control(" + id + ", 'CLOSE')\">ZU</button>" +
                 "</div>" +
                 "<input type=\"range\" class=\"slider\" min=\"0\" max=\"100\" value=\"50\" onchange=\"control(" + id + ", this.value)\" id=\"slider" + id + "\">" +
-                "<div class=\"status\" id=\"status" + id + "\">Position: --%, Strom: -- mA</div>" +
+                "<div class=\"status\" id=\"status" + id + "\">Position: --%</div>" +
                 "<div class=\"learn\">" +
                 "<button onclick=\"learn(" + id + ", 'open')\">Oeffnungszeit lernen</button>" +
                 "<button onclick=\"learn(" + id + ", 'close')\">Schliesszeit lernen</button>" +
@@ -88,8 +88,7 @@ void WebServerHandler::begin() {
                         const m = data["motor" + id];
                         if (m) {
                             document.getElementById("status" + id).innerHTML = 
-                                "Position: " + m.position + "%, Strom: " + m.current.toFixed(0) + " mA, " +
-                                "Kalibriert: " + (m.calibrated ? "JA" : "NEIN");
+                                "Position: " + m.position + "%, Kalibriert: " + (m.calibrated ? "JA" : "NEIN");
                             document.getElementById("slider" + id).value = m.position;
                         }
                     });

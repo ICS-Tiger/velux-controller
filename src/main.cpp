@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <Wire.h>
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include "config.h"
@@ -82,25 +81,21 @@ String getStatusJson() {
     
     JsonObject m1 = doc["motor1"].to<JsonObject>();
     m1["position"] = motor1->getPosition();
-    m1["current"] = motor1->getCurrent();
     m1["calibrated"] = motor1->getCalibrated();
     m1["state"] = motor1->getState();
     
     JsonObject m2 = doc["motor2"].to<JsonObject>();
     m2["position"] = motor2->getPosition();
-    m2["current"] = motor2->getCurrent();
     m2["calibrated"] = motor2->getCalibrated();
     m2["state"] = motor2->getState();
     
     JsonObject m3 = doc["motor3"].to<JsonObject>();
     m3["position"] = motor3->getPosition();
-    m3["current"] = motor3->getCurrent();
     m3["calibrated"] = motor3->getCalibrated();
     m3["state"] = motor3->getState();
     
     JsonObject m4 = doc["motor4"].to<JsonObject>();
     m4["position"] = motor4->getPosition();
-    m4["current"] = motor4->getCurrent();
     m4["calibrated"] = motor4->getCalibrated();
     m4["state"] = motor4->getState();
     
@@ -152,19 +147,15 @@ void setup() {
     Serial.println("╚═══════════════════════════════════════╝");
     Serial.println();
     
-    // I2C Bus initialisieren
-    Wire.begin(I2C_SDA, I2C_SCL);
-    Serial.println("✓ I2C Bus initialisiert");
-    
     // PWM Controller
     PWMController::begin();
     
     // Motoren initialisieren
     Serial.println("\n=== Motor Initialisierung ===");
-    motor1 = new MotorController(1, M1_R_EN, M1_L_EN, INA219_ADDR_M1);
-    motor2 = new MotorController(2, M2_R_EN, M2_L_EN, INA219_ADDR_M2);
-    motor3 = new MotorController(3, M3_R_EN, M3_L_EN, INA219_ADDR_M3);
-    motor4 = new MotorController(4, M4_R_EN, M4_L_EN, INA219_ADDR_M4);
+    motor1 = new MotorController(1, M1_R_EN, M1_L_EN);
+    motor2 = new MotorController(2, M2_R_EN, M2_L_EN);
+    motor3 = new MotorController(3, M3_R_EN, M3_L_EN);
+    motor4 = new MotorController(4, M4_R_EN, M4_L_EN);
     
     motor1->begin();
     motor2->begin();
@@ -192,6 +183,22 @@ void setup() {
     buttons->onM4Open = []() { motor4->open(); };
     buttons->onM4Close = []() { motor4->close(); };
     buttons->onM4Stop = []() { motor4->stop(); };
+    
+    // Alle AUF/ZU Callbacks
+    buttons->onAllOpen = []() {
+        Serial.println("=== Alle Motoren ÖFFNEN ===");
+        motor1->open();
+        motor2->open();
+        motor3->open();
+        motor4->open();
+    };
+    buttons->onAllClose = []() {
+        Serial.println("=== Alle Motoren SCHLIEßEN ===");
+        motor1->close();
+        motor2->close();
+        motor3->close();
+        motor4->close();
+    };
     
     // WiFi verbinden
     connectWiFi();
@@ -277,10 +284,10 @@ void loop() {
         lastStatusUpdate = now;
         
         if (mqtt) {
-            mqtt->publishMotorState(1, "running", motor1->getPosition(), motor1->getCurrent());
-            mqtt->publishMotorState(2, "running", motor2->getPosition(), motor2->getCurrent());
-            mqtt->publishMotorState(3, "running", motor3->getPosition(), motor3->getCurrent());
-            mqtt->publishMotorState(4, "running", motor4->getPosition(), motor4->getCurrent());
+            mqtt->publishMotorState(1, "running", motor1->getPosition(), 0);
+            mqtt->publishMotorState(2, "running", motor2->getPosition(), 0);
+            mqtt->publishMotorState(3, "running", motor3->getPosition(), 0);
+            mqtt->publishMotorState(4, "running", motor4->getPosition(), 0);
         }
     }
     

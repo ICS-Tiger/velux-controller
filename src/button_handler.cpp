@@ -1,110 +1,125 @@
 #include "button_handler.h"
 #include "config.h"
 
-Button::Button(uint8_t buttonPin) {
-    pin = buttonPin;
-    lastState = HIGH;
-    currentState = HIGH;
-    pressedTime = 0;
-    lastDebounceTime = 0;
-    longPressTriggered = false;
+// ===== AnalogKeypad =====
+
+AnalogKeypad::AnalogKeypad(uint8_t adcPin) {
+    pin = adcPin;
+    lastKey = -1;
+    lastPressTime = 0;
+    lastReadTime = 0;
+    keyPressed = false;
 }
 
-void Button::begin() {
-    pinMode(pin, INPUT_PULLUP);
+void AnalogKeypad::begin() {
+    pinMode(pin, INPUT);
+    analogSetAttenuation(ADC_11db); // 0-3.3V Range
+    Serial.printf("Analoges Keypad initialisiert auf Pin %d\n", pin);
 }
 
-ButtonEvent Button::update() {
-    bool reading = digitalRead(pin);
-    unsigned long now = millis();
+int AnalogKeypad::readKey() {
+    int adcValue = analogRead(pin);
     
-    if (reading != lastState) {
-        lastDebounceTime = now;
+    // Keine Taste gedrückt (hoher Wert nahe 4095)
+    if (adcValue > 2500) {
+        return -1;
     }
     
-    if ((now - lastDebounceTime) > BUTTON_DEBOUNCE_MS) {
-        if (reading != currentState) {
-            currentState = reading;
-            
-            if (currentState == LOW) {
-                pressedTime = now;
-                longPressTriggered = false;
-                lastState = reading;
-                return BTN_PRESSED;
-            } else {
-                lastState = reading;
-                return BTN_RELEASED;
-            }
+    // Finde die nächstliegende Taste
+    int closestKey = -1;
+    int minDiff = 9999;
+    
+    for (int i = 0; i < NUM_KEYS; i++) {
+        int diff = abs(adcValue - thresholds[i]);
+        if (diff < minDiff && diff < 100) { // Toleranz von ±100
+            minDiff = diff;
+            closestKey = i;
         }
     }
     
-    if (currentState == LOW && !longPressTriggered && 
-        (now - pressedTime) > BUTTON_LONG_PRESS_MS) {
-        longPressTriggered = true;
-        lastState = reading;
-        return BTN_LONG_PRESS;
-    }
-    
-    lastState = reading;
-    return BTN_NONE;
+    return closestKey;
 }
 
+int AnalogKeypad::loop() {
+    unsigned long now = millis();
+    
+    // Nur alle KEYPAD_READ_INTERVAL ms lesen
+    if (now - lastReadTime < KEYPAD_READ_INTERVAL) {
+        return -1;
+    }
+    lastReadTime = now;
+    
+    int currentKey = readKey();
+    
+    // Taste wurde gedrückt (Flanke)
+    if (currentKey != -1 && lastKey == -1) {
+        if (!keyPressed) {
+            keyPressed = true;
+            lastPressTime = now;
+            lastKey = currentKey;
+            Serial.printf("Keypad: Taste %d gedrückt (ADC: %d)\n", currentKey, analogRead(pin));
+            return currentKey;
+        }
+    }
+    // Taste wurde losgelassen
+    else if (currentKey == -1 && lastKey != -1) {
+        keyPressed = false;
+        lastKey = -1;
+    }
+    
+    return -1;
+}
+
+// ===== ButtonHandler =====
+
 ButtonHandler::ButtonHandler() {
-    btnM1Open = new Button(BTN_M1_OPEN);
-    btnM1Close = new Button(BTN_M1_CLOSE);
-    btnM2Open = new Button(BTN_M2_OPEN);
-    btnM2Close = new Button(BTN_M2_CLOSE);
-    btnM3Open = new Button(BTN_M3_OPEN);
-    btnM3Close = new Button(BTN_M3_CLOSE);
-    btnM4Open = new Button(BTN_M4_OPEN);
-    btnM4Close = new Button(BTN_M4_CLOSE);
+    keypad = new AnalogKeypad(KEYPAD_PIN);
 }
 
 void ButtonHandler::begin() {
-    btnM1Open->begin();
-    btnM1Close->begin();
-    btnM2Open->begin();
-    btnM2Close->begin();
-    btnM3Open->begin();
-    btnM3Close->begin();
-    btnM4Open->begin();
-    btnM4Close->begin();
-    
-    Serial.println("Button-Handler: Initialisiert (8 Taster)");
+    keypad->begin();
+    Serial.println("✓ Button Handler initialisiert (16-Tasten Analog Keypad)");
 }
 
 void ButtonHandler::loop() {
-    ButtonEvent evt;
+    int key = keypad->loop();
     
-    evt = btnM1Open->update();
-    if (evt == BTN_PRESSED && onM1Open) onM1Open();
-    if (evt == BTN_LONG_PRESS && onM1Stop) onM1Stop();
+    if (key == -1) return;
     
-    evt = btnM1Close->update();
-    if (evt == BTN_PRESSED && onM1Close) onM1Close();
-    if (evt == BTN_LONG_PRESS && onM1Stop) onM1Stop();
-    
-    evt = btnM2Open->update();
-    if (evt == BTN_PRESSED && onM2Open) onM2Open();
-    if (evt == BTN_LONG_PRESS && onM2Stop) onM2Stop();
-    
-    evt = btnM2Close->update();
-    if (evt == BTN_PRESSED && onM2Close) onM2Close();
-    if (evt == BTN_LONG_PRESS && onM2Stop) onM2Stop();
-    
-    evt = btnM3Open->update();
-    if (evt == BTN_PRESSED && onM3Open) onM3Open();
-    if (evt == BTN_LONG_PRESS && onM3Stop) onM3Stop();
-    
-    evt = btnM3Close->update();
-    if (evt == BTN_PRESSED && onM3Close) onM3Close();
-    if (evt == BTN_LONG_PRESS && onM3Stop) onM3Stop();
-    
-    evt = btnM4Open->update();
-    if (evt == BTN_PRESSED && onM4Open) onM4Open();
-    if (evt == BTN_LONG_PRESS && onM4Stop) onM4Stop();
-    
-    evt = btnM4Close->update();
-    if (evt == BTN_PRESSED && onM4Close) onM4Close();
-    if (evt == BTN_LONG_PRESS && onM4Stop) onM4Stop();
+    // Tastenbelegung
+    switch (key) {
+        // Motor 1-4 AUF (Tasten 0-3)
+        case 0: if (onM1Open) onM1Open(); break;
+        case 1: if (onM2Open) onM2Open(); break;
+        case 2: if (onM3Open) onM3Open(); break;
+        case 3: if (onM4Open) onM4Open(); break;
+        
+        // Motor 1-4 ZU (Tasten 4-7)
+        case 4: if (onM1Close) onM1Close(); break;
+        case 5: if (onM2Close) onM2Close(); break;
+        case 6: if (onM3Close) onM3Close(); break;
+        case 7: if (onM4Close) onM4Close(); break;
+        
+        // Motor 1-4 STOP (Tasten 8-11)
+        case 8: if (onM1Stop) onM1Stop(); break;
+        case 9: if (onM2Stop) onM2Stop(); break;
+        case 10: if (onM3Stop) onM3Stop(); break;
+        case 11: if (onM4Stop) onM4Stop(); break;
+        
+        // Alle AUF/ZU (Tasten 12-13)
+        case 12: 
+            Serial.println("Keypad: ALLE AUF");
+            if (onAllOpen) onAllOpen(); 
+            break;
+        case 13: 
+            Serial.println("Keypad: ALLE ZU");
+            if (onAllClose) onAllClose(); 
+            break;
+        
+        // Reserve (Tasten 14-15)
+        case 14:
+        case 15:
+            Serial.printf("Keypad: Reserve-Taste %d\n", key);
+            break;
+    }
 }

@@ -123,7 +123,7 @@ void PWMController::resetSoftStart() {
 
 // ===== MotorController =====
 
-MotorController::MotorController(uint8_t motorId, uint8_t ren, uint8_t len, uint8_t i2cAddr) {
+MotorController::MotorController(uint8_t motorId, uint8_t ren, uint8_t len) {
     id = motorId;
     pinREN = ren;
     pinLEN = len;
@@ -139,10 +139,6 @@ MotorController::MotorController(uint8_t motorId, uint8_t ren, uint8_t len, uint
     moveStartTime = 0;
     lastPositionUpdate = 0;
     
-    currentSensor = new Adafruit_INA219(i2cAddr);
-    maxCurrent = 0;
-    currentThreshold = 3000;
-    
     isCalibrated = false;
 }
 
@@ -152,12 +148,7 @@ void MotorController::begin() {
     digitalWrite(pinREN, LOW);
     digitalWrite(pinLEN, LOW);
     
-    if (!currentSensor->begin()) {
-        Serial.printf("Motor %d: INA219 nicht gefunden!\n", id);
-    } else {
-        currentSensor->setCalibration_32V_2A();
-        Serial.printf("Motor %d: INA219 initialisiert\n", id);
-    }
+    Serial.printf("Motor %d: Initialisiert\n", id);
     
     loadConfig();
 }
@@ -171,8 +162,6 @@ void MotorController::loop() {
         updatePosition();
         lastPositionUpdate = now;
     }
-    
-    checkCurrentLimit();
     
     if (state == OPENING || state == CLOSING) {
         if (currentPosition == targetPosition) {
@@ -199,27 +188,6 @@ void MotorController::updatePosition() {
     } else if (state == CLOSING || state == LEARNING_CLOSE) {
         currentPosition = max((uint8_t)0, (uint8_t)(100 - ((elapsed * 100) / totalTime)));
     }
-}
-
-void MotorController::checkCurrentLimit() {
-    float current = getCurrent();
-    
-    if (current > maxCurrent) {
-        maxCurrent = current;
-    }
-    
-    if (current > currentThreshold) {
-        if (state == LEARNING_OPEN || state == LEARNING_CLOSE) {
-            finishLearn();
-        } else {
-            Serial.printf("Motor %d: Stromgrenze erreicht (%.2fmA)\n", id, current);
-            stop();
-        }
-    }
-}
-
-float MotorController::getCurrent() {
-    return currentSensor->getCurrent_mA();
 }
 
 void MotorController::applyMotorControl(MotorDirection dir) {
@@ -267,7 +235,6 @@ void MotorController::open() {
     currentDirection = DIR_OPEN;
     moveStartTime = millis();
     lastPositionUpdate = moveStartTime;
-    maxCurrent = 0;
     
     applyMotorControl(DIR_OPEN);
     PWMController::motorStarted(DIR_OPEN);
@@ -285,7 +252,6 @@ void MotorController::close() {
     currentDirection = DIR_CLOSE;
     moveStartTime = millis();
     lastPositionUpdate = moveStartTime;
-    maxCurrent = 0;
     
     applyMotorControl(DIR_CLOSE);
     PWMController::motorStarted(DIR_CLOSE);
@@ -311,7 +277,6 @@ void MotorController::startLearnOpen() {
     currentPosition = 0;
     targetPosition = 100;
     moveStartTime = millis();
-    maxCurrent = 0;
     
     applyMotorControl(DIR_OPEN);
     PWMController::motorStarted(DIR_OPEN);
@@ -326,7 +291,6 @@ void MotorController::startLearnClose() {
     currentPosition = 100;
     targetPosition = 0;
     moveStartTime = millis();
-    maxCurrent = 0;
     
     applyMotorControl(DIR_CLOSE);
     PWMController::motorStarted(DIR_CLOSE);

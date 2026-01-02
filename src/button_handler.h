@@ -3,45 +3,54 @@
 
 #include <Arduino.h>
 
-enum ButtonEvent {
-    BTN_NONE,
-    BTN_PRESSED,
-    BTN_RELEASED,
-    BTN_LONG_PRESS
-};
+#define NUM_KEYS 16
 
-class Button {
+class AnalogKeypad {
 private:
     uint8_t pin;
-    bool lastState;
-    bool currentState;
-    unsigned long pressedTime;
-    unsigned long lastDebounceTime;
-    bool longPressTriggered;
+    int lastKey;
+    unsigned long lastPressTime;
+    unsigned long lastReadTime;
+    bool keyPressed;
+    
+    // ADC-Schwellwerte für 16 Tasten (anpassbar nach Kalibrierung)
+    const int thresholds[NUM_KEYS] = {
+        50,   // Taste 0
+        200,  // Taste 1
+        350,  // Taste 2
+        500,  // Taste 3
+        650,  // Taste 4
+        800,  // Taste 5
+        950,  // Taste 6
+        1100, // Taste 7
+        1250, // Taste 8
+        1400, // Taste 9
+        1550, // Taste 10
+        1700, // Taste 11
+        1850, // Taste 12
+        2000, // Taste 13
+        2150, // Taste 14
+        2300  // Taste 15
+    };
+    
+    int readKey();
     
 public:
-    Button(uint8_t buttonPin);
+    AnalogKeypad(uint8_t adcPin);
     void begin();
-    ButtonEvent update();
-    bool isPressed() { return currentState; }
+    int loop();
 };
 
 class ButtonHandler {
 private:
-    Button* btnM1Open;
-    Button* btnM1Close;
-    Button* btnM2Open;
-    Button* btnM2Close;
-    Button* btnM3Open;
-    Button* btnM3Close;
-    Button* btnM4Open;
-    Button* btnM4Close;
+    AnalogKeypad* keypad;
     
 public:
     ButtonHandler();
     void begin();
     void loop();
     
+    // Motor-Callbacks
     void (*onM1Open)() = nullptr;
     void (*onM1Close)() = nullptr;
     void (*onM1Stop)() = nullptr;
@@ -57,6 +66,10 @@ public:
     void (*onM4Open)() = nullptr;
     void (*onM4Close)() = nullptr;
     void (*onM4Stop)() = nullptr;
+    
+    // Spezial-Callbacks
+    void (*onAllOpen)() = nullptr;
+    void (*onAllClose)() = nullptr;
 };
 
 #endif
