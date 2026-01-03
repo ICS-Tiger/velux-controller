@@ -45,6 +45,8 @@ void WebServerHandler::begin() {
             <button class="btn-all btn-open" onclick="controlAll('OPEN')">🔼 ALLE AUF</button>
             <button class="btn-all btn-close" onclick="controlAll('CLOSE')">🔽 ALLE ZU</button>
         </div>
+        
+        <div class="motors" id="motors"></div>
     </div>
     
     <script>

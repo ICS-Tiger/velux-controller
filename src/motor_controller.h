@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <Adafruit_INA219.h>
 
 enum MotorState {
     STOPPED,
@@ -23,6 +24,9 @@ private:
     uint8_t id;
     uint8_t pinREN;
     uint8_t pinLEN;
+    uint8_t inaAddress;
+    
+    Adafruit_INA219* ina219;
     
     MotorState state;
     MotorDirection currentDirection;
@@ -34,15 +38,21 @@ private:
     
     unsigned long moveStartTime;
     unsigned long lastPositionUpdate;
+    unsigned long lastCurrentCheck;
+    unsigned long overcurrentStartTime;
     
     bool isCalibrated;
+    bool overcurrentDetected;
+    float currentCurrent_mA;
+    
     Preferences prefs;
     
     void updatePosition();
     void applyMotorControl(MotorDirection dir);
+    void checkCurrent();
     
 public:
-    MotorController(uint8_t motorId, uint8_t rEN, uint8_t lEN);
+    MotorController(uint8_t motorId, uint8_t rEN, uint8_t lEN, uint8_t inaAddr);
     
     void begin();
     void loop();
@@ -64,6 +74,8 @@ public:
     unsigned long getOpenTime() { return openTime; }
     unsigned long getCloseTime() { return closeTime; }
     bool isMoving() { return state != STOPPED; }
+    float getCurrent() { return currentCurrent_mA; }
+    bool hasOvercurrent() { return overcurrentDetected; }
     
     void setPosition(uint8_t pos) { currentPosition = pos; }
     

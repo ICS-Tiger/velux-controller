@@ -17,19 +17,32 @@
 #define MQTT_TOPIC_PREFIX "velux"
 
 // ===== Motor Pins (4x BTS7960 - OPTIMIERT) =====
+// PWM-Pins (gemeinsam für alle Motoren)
 #define RPWM_ALL 25
 #define LPWM_ALL 26
 #define RPWM_CHANNEL 0
 #define LPWM_CHANNEL 1
 
-#define M1_R_EN 27
-#define M1_L_EN 14
-#define M2_R_EN 32
-#define M2_L_EN 33
+// Enable-Pins (Paare liegen nebeneinander)
+#define M1_R_EN 32
+#define M1_L_EN 33
+#define M2_R_EN 27
+#define M2_L_EN 14
 #define M3_R_EN 16
 #define M3_L_EN 17
-#define M4_R_EN 19
-#define M4_L_EN 21
+#define M4_R_EN 18
+#define M4_L_EN 19
+
+// ===== INA219 Stromsensoren =====
+#define INA219_ADDR_M1 0x40
+#define INA219_ADDR_M2 0x41
+#define INA219_ADDR_M3 0x44
+#define INA219_ADDR_M4 0x45
+
+// Überstromschutz
+#define MAX_CURRENT_MA 3000.0     // 3A Maximum
+#define OVERCURRENT_TIME_MS 500    // Überstrom für 500ms = Abschaltung
+#define CURRENT_CHECK_INTERVAL 100 // Stromprüfung alle 100ms
 
 // ===== Analoges Keypad (16 Tasten an einem ADC-Pin) =====
 #define KEYPAD_PIN 34

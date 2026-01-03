@@ -123,10 +123,13 @@ void PWMController::resetSoftStart() {
 
 // ===== MotorController =====
 
-MotorController::MotorController(uint8_t motorId, uint8_t ren, uint8_t len) {
+MotorController::MotorController(uint8_t motorId, uint8_t ren, uint8_t len, uint8_t inaAddr) {
     id = motorId;
     pinREN = ren;
     pinLEN = len;
+    inaAddress = inaAddr;
+    
+    ina219 = new Adafruit_INA219(inaAddress);
     
     state = STOPPED;
     currentDirection = DIR_STOP;
@@ -138,8 +141,12 @@ MotorController::MotorController(uint8_t motorId, uint8_t ren, uint8_t len) {
     
     moveStartTime = 0;
     lastPositionUpdate = 0;
+    lastCurrentCheck = 0;
+    overcurrentStartTime = 0;
     
     isCalibrated = false;
+    overcurrentDetected = false;
+    currentCurrent_mA = 0.0;
 }
 
 void MotorController::begin() {
@@ -147,6 +154,13 @@ void MotorController::begin() {
     pinMode(pinLEN, OUTPUT);
     digitalWrite(pinREN, LOW);
     digitalWrite(pinLEN, LOW);
+    
+    // INA219 initialisieren
+    if (!ina219->begin()) {
+        Serial.printf("Motor %d: INA219 (0x%02X) nicht gefunden!\n", id, inaAddress);
+    } else {
+        Serial.printf("Motor %d: INA219 (0x%02X) initialisiert\n", id, inaAddress);
+    }
     
     Serial.printf("Motor %d: Initialisiert\n", id);
     
@@ -157,6 +171,12 @@ void MotorController::loop() {
     if (state == STOPPED) return;
     
     unsigned long now = millis();
+    
+    // Stromprüfung
+    if (now - lastCurrentCheck >= CURRENT_CHECK_INTERVAL) {
+        checkCurrent();
+        lastCurrentCheck = now;
+    }
     
     if (now - lastPositionUpdate >= POSITION_UPDATE_INTERVAL) {
         updatePosition();
@@ -205,6 +225,32 @@ void MotorController::applyMotorControl(MotorDirection dir) {
             digitalWrite(pinREN, LOW);
             digitalWrite(pinLEN, LOW);
             break;
+    }
+}
+
+void MotorController::checkCurrent() {
+    currentCurrent_mA = ina219->getCurrent_mA();
+    
+    // INA219 kann negative Werte liefern (Stromrichtung!)
+    // Für Überstromprüfung Absolutwert verwenden
+    float absCurrent = abs(currentCurrent_mA);
+    
+    // Überstromprüfung
+    if (absCurrent > MAX_CURRENT_MA) {
+        if (overcurrentStartTime == 0) {
+            overcurrentStartTime = millis();
+            Serial.printf("Motor %d: Überstrom erkannt (%.0f mA)!\n", id, currentCurrent_mA);
+        } else if (millis() - overcurrentStartTime >= OVERCURRENT_TIME_MS) {
+            overcurrentDetected = true;
+            Serial.printf("Motor %d: ÜBERSTROM ABSCHALTUNG! (%.0f mA)\n", id, currentCurrent_mA);
+            stop();
+        }
+    } else {
+        overcurrentStartTime = 0;
+        if (overcurrentDetected) {
+            Serial.printf("Motor %d: Überstrom aufgehoben (%.0f mA)\n", id, currentCurrent_mA);
+            overcurrentDetected = false;
+        }
     }
 }
 

@@ -77,27 +77,35 @@ void setupOTA() {
 
 // Status JSON generieren
 String getStatusJson() {
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<1536> doc;
     
     JsonObject m1 = doc["motor1"].to<JsonObject>();
     m1["position"] = motor1->getPosition();
     m1["calibrated"] = motor1->getCalibrated();
     m1["state"] = motor1->getState();
+    m1["current"] = motor1->getCurrent();
+    m1["overcurrent"] = motor1->hasOvercurrent();
     
     JsonObject m2 = doc["motor2"].to<JsonObject>();
     m2["position"] = motor2->getPosition();
     m2["calibrated"] = motor2->getCalibrated();
     m2["state"] = motor2->getState();
+    m2["current"] = motor2->getCurrent();
+    m2["overcurrent"] = motor2->hasOvercurrent();
     
     JsonObject m3 = doc["motor3"].to<JsonObject>();
     m3["position"] = motor3->getPosition();
     m3["calibrated"] = motor3->getCalibrated();
     m3["state"] = motor3->getState();
+    m3["current"] = motor3->getCurrent();
+    m3["overcurrent"] = motor3->hasOvercurrent();
     
     JsonObject m4 = doc["motor4"].to<JsonObject>();
     m4["position"] = motor4->getPosition();
     m4["calibrated"] = motor4->getCalibrated();
     m4["state"] = motor4->getState();
+    m4["current"] = motor4->getCurrent();
+    m4["overcurrent"] = motor4->hasOvercurrent();
     
     String output;
     serializeJson(doc, output);
@@ -152,10 +160,10 @@ void setup() {
     
     // Motoren initialisieren
     Serial.println("\n=== Motor Initialisierung ===");
-    motor1 = new MotorController(1, M1_R_EN, M1_L_EN);
-    motor2 = new MotorController(2, M2_R_EN, M2_L_EN);
-    motor3 = new MotorController(3, M3_R_EN, M3_L_EN);
-    motor4 = new MotorController(4, M4_R_EN, M4_L_EN);
+    motor1 = new MotorController(1, M1_R_EN, M1_L_EN, INA219_ADDR_M1);
+    motor2 = new MotorController(2, M2_R_EN, M2_L_EN, INA219_ADDR_M2);
+    motor3 = new MotorController(3, M3_R_EN, M3_L_EN, INA219_ADDR_M3);
+    motor4 = new MotorController(4, M4_R_EN, M4_L_EN, INA219_ADDR_M4);
     
     motor1->begin();
     motor2->begin();
