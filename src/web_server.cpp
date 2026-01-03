@@ -6,7 +6,7 @@ WebServerHandler::WebServerHandler() : server(WEB_SERVER_PORT) {}
 void WebServerHandler::begin() {
     // Root
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(200, "text/html", R"(
+        request->send(200, "text/html", R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
@@ -34,12 +34,17 @@ void WebServerHandler::begin() {
         .learn { margin-top: 15px; padding-top: 15px; border-top: 1px solid #444; }
         .learn button { background: #2196F3; }
         .learn button:hover { background: #0b7dda; }
+        .all-controls { display: flex; gap: 20px; justify-content: center; margin-bottom: 30px; }
+        .btn-all { padding: 20px 40px; font-size: 18px; min-width: 200px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🏠 Velux Rolladen Controller</h1>
-        <div class="motors" id="motors"></div>
+    <h1>🏠 Velux Rolladen Controller</h1>
+        <div class="all-controls">
+            <button class="btn-all btn-open" onclick="controlAll('OPEN')">🔼 ALLE AUF</button>
+            <button class="btn-all btn-close" onclick="controlAll('CLOSE')">🔽 ALLE ZU</button>
+        </div>
     </div>
     
     <script>
@@ -72,6 +77,12 @@ void WebServerHandler::begin() {
                 .then(function(data) { console.log(data); });
         }
         
+        function controlAll(cmd) {
+            fetch("/all/control?cmd=" + cmd)
+                .then(function(r) { return r.text(); })
+                .then(function(data) { console.log(data); });
+        }
+        
         function learn(motor, type) {
             if (confirm("Motor " + motor + ": " + (type === "open" ? "Oeffnungszeit" : "Schliesszeit") + " lernen?")) {
                 fetch("/motor" + motor + "/learn?type=" + type)
@@ -100,7 +111,7 @@ void WebServerHandler::begin() {
     </script>
 </body>
 </html>
-        )");
+)rawliteral");
     });
     
     // Motor Control
@@ -121,6 +132,22 @@ void WebServerHandler::begin() {
             }
         });
     }
+    
+    // Alle Motoren steuern
+    server.on("/all/control", HTTP_GET, [this](AsyncWebServerRequest *request){
+        if (request->hasParam("cmd")) {
+            String cmd = request->getParam("cmd")->value();
+            
+            if (onMotor1Command) onMotor1Command(cmd.c_str());
+            if (onMotor2Command) onMotor2Command(cmd.c_str());
+            if (onMotor3Command) onMotor3Command(cmd.c_str());
+            if (onMotor4Command) onMotor4Command(cmd.c_str());
+            
+            request->send(200, "text/plain", "OK - Alle Motoren");
+        } else {
+            request->send(400, "text/plain", "Missing cmd");
+        }
+    });
     
     // Learn
     for (int i = 1; i <= 4; i++) {

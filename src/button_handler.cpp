@@ -13,15 +13,20 @@ AnalogKeypad::AnalogKeypad(uint8_t adcPin) {
 
 void AnalogKeypad::begin() {
     pinMode(pin, INPUT);
-    analogSetAttenuation(ADC_11db); // 0-3.3V Range
-    Serial.printf("Analoges Keypad initialisiert auf Pin %d\n", pin);
+    
+    // ADC konfigurieren
+    adcAttachPin(pin);
+    analogSetPinAttenuation(pin, ADC_11db); // 0-3.3V Range
+    analogReadResolution(12); // 12-bit (0-4095)
+    
+    Serial.printf("✓ Analoges Keypad initialisiert auf GPIO %d\n", pin);
 }
 
 int AnalogKeypad::readKey() {
     int adcValue = analogRead(pin);
     
-    // Keine Taste gedrückt (hoher Wert nahe 4095)
-    if (adcValue > 2500) {
+    // Keine Taste gedrückt (niedriger Wert nahe 0)
+    if (adcValue < 50) {
         return -1;
     }
     
@@ -57,7 +62,6 @@ int AnalogKeypad::loop() {
             keyPressed = true;
             lastPressTime = now;
             lastKey = currentKey;
-            Serial.printf("Keypad: Taste %d gedrückt (ADC: %d)\n", currentKey, analogRead(pin));
             return currentKey;
         }
     }
