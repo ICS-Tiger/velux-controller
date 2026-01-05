@@ -133,14 +133,18 @@ Jedes BTS7960 Modul steuert 1 Motor:
 │  └─ B-         ──→  GND         [von Netzteil]                           │
 │                                                                          │
 │  MOTOR OUTPUT:                                                           │
-│  ├─ M+         ──→  Motor Pol 1  ────┐                                   │
-│  └─ M-         ──→  [INA219 V-]      │                                   │
-│                                       │                                  │
-│  INA219 Strommessung:                │                                   │
-│  ├─ [INA219 V+] ───────────→ Motor Pol 2                                 │
-│  └─ [INA219 V-] ───────────→ M- (siehe oben)                             │
+│  ├─ M+         ──→  INA219 V+ (VIN+)                                     │
+│  │                  │                                                    │
+│  │                  └─► INA219 V- (VOUT+) ──→ Motor Pol 1 (+)            │
+│  │                                                                       │
+│  └─ M-         ◄──  Motor Pol 2 (-)                                      │
 │                                                                          │
-│  HINWEIS: INA219 misst Strom zwischen BTS7960 M- und Motor!              │
+│  INA219 Strommessung:                                                   │
+│  - INA219 V+ (VIN+)  misst vom BTS7960 M+                                │
+│  - INA219 V- (VOUT+) geht zum Motor +                                    │
+│  - Motor - geht zurück zu BTS7960 M-                                     │
+│                                                                          │
+│  WICHTIG: Strommessung erfolgt im PLUS-Zweig zwischen BTS und Motor!    │
 │                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
 
@@ -168,8 +172,11 @@ Jedes INA219 Modul misst den Strom für 1 Motor:
 │  └─ INA219 #4  =  0x45  (Motor 4)                                        │
 │                                                                          │
 │  STROMMESSUNG (im Motor-Kreislauf):                                      │
-│  ├─ V+         ──→  Motor Pol 2                                          │
-│  └─ V-         ──→  BTS7960 M-                                           │
+│  ├─ V+ (VIN+)  ──→  BTS7960 M+                                            │
+│  └─ V- (VOUT+) ──→  Motor Pol 1 (+)                                      │
+│                                                                          │
+│  Stromfluss:                                                             │
+│  BTS7960 M+ → INA219 V+ → INA219 V- → Motor+ → Motor- → BTS7960 M-      │
 │                                                                          │
 │  ADRESSIERUNG (Löt-Jumper):                                              │
 │  ├─ 0x40: keine Jumper                                                   │
@@ -187,37 +194,53 @@ Jedes INA219 Modul misst den Strom für 1 Motor:
                            ┌────────────┐
                            │  ESP32     │
                            │            │
-         ┌─────────────────┤ GPIO 25    │ (RPWM zu allen)
-         │  ┌──────────────┤ GPIO 26    │ (LPWM zu allen)
+         ┌─────────────────┤ GPIO 25    │ (RPWM zu allen BTS7960)
+         │  ┌──────────────┤ GPIO 26    │ (LPWM zu allen BTS7960)
          │  │  ┌───────────┤ GPIO 32    │ (M1 R_EN)
          │  │  │  ┌────────┤ GPIO 33    │ (M1 L_EN)
-         │  │  │  │  ┌─────┤ GPIO 21    │ (SDA zu allen)
-         │  │  │  │  │  ┌──┤ GPIO 22    │ (SCL zu allen)
+         │  │  │  │  ┌─────┤ GPIO 21    │ (SDA zu allen INA219)
+         │  │  │  │  │  ┌──┤ GPIO 22    │ (SCL zu allen INA219)
          │  │  │  │  │  │  └────────────┘
          │  │  │  │  │  │
          │  │  │  │  │  │  ┌────────────┐
          │  │  │  │  │  └──┤ SDA        │
          │  │  │  │  └─────┤ SCL   INA  │
          │  │  │  │        │ 0x40  219  │
+         │  │  │  │        │ VCC  3.3V  │
+         │  │  │  │        │ GND  GND   │
+         │  │  │  │        └────────────┘
+         │  │  │  │
+         │  │  │  │        ┌────────────┐
+         │  │  │  │        │  BTS7960   │
          │  │  │  │        │            │
-         │  │  │  │   ┌────┤ V+         │─────┐
-         │  │  │  │   │    └────────────┘     │
-         │  │  │  │   │                       │
-         │  │  │  │   │    ┌────────────┐     │    ┌─────────┐
-         │  │  │  │   │    │  BTS7960   │     │    │ MOTOR 1 │
-         │  │  │  │   │    │            │     │    │         │
-         ├──┼──┼──┼───┼────┤ RPWM       │     │    │         │
-         │  └──┼──┼───┼────┤ LPWM       │     └────┤ +       │
-         │     └──┼───┼────┤ R_EN       │          │         │
-         │        └───┼────┤ L_EN       │     ┌────┤ -       │
-         │            │    │            │     │    └─────────┘
-         │            │    │ B+  12V ◄──┼─────┘
-         │            │    │ B-  GND ───┼─────────── GND
-         │            │    │            │
-         │            │    │ M+  ───────┼────────────────┐
-         │            └────┤ M-  ◄──────┼─── INA V-      │
-         │                 └────────────┘                │
-         └─────────────────────────────────────────────┘
+         ├──┼──┼──┼────────┤ RPWM       │
+         │  └──┼──┼────────┤ LPWM       │
+         │     └──┼────────┤ R_EN       │
+         │        └────────┤ L_EN       │
+         │                 │            │
+         │                 │ B+  12V ◄──┼───── 12V Netzteil (+)
+         │                 │ B-  GND ───┼───── GND
+         │                 │            │
+         │                 │ M+ ────────┼──┐
+         │                 │            │  │  INA219 Strommessung
+         │                 │            │  │  ┌─────────────┐
+         │                 │            │  └──┤ V+ (VIN+)   │
+         │                 │            │     │             │
+         │                 │            │     │ V- (VOUT+)  │────┐
+         │                 │            │     └─────────────┘    │
+         │                 │            │                        │
+         │                 │            │     ┌─────────┐        │
+         │                 │            │     │ MOTOR 1 │        │
+         │                 │            │     │         │        │
+         │                 │            │     │ +  ◄────┼────────┘
+         │                 │            │     │         │
+         │                 │            │     │ -  ─────┼───┐
+         │                 │            │     └─────────┘   │
+         │                 │ M- ◄───────┼───────────────────┘
+         │                 └────────────┘
+         │
+         └─ HINWEIS: Strommessung im PLUS-Zweig!
+            BTS M+ → INA V+ → INA V- → Motor+ → Motor- → BTS M-
 
 
 ═══════════════════════════════════════════════════════════════════════════════
