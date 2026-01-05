@@ -7,6 +7,9 @@ uint8_t PWMController::currentPWM = 0;
 bool PWMController::softStartActive = false;
 unsigned long PWMController::softStartBegin = 0;
 unsigned long PWMController::lastPWMUpdate = 0;
+bool PWMController::relayOn = false;
+unsigned long PWMController::lastMotorStopTime = 0;
+bool PWMController::relayShutdownPending = false;
 
 void PWMController::begin() {
     ledcSetup(RPWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
@@ -17,18 +20,23 @@ void PWMController::begin() {
     ledcWrite(RPWM_CHANNEL, 0);
     ledcWrite(LPWM_CHANNEL, 0);
     
-    Serial.println("PWM-Controller: Initialisiert (gemeinsame PWM mit Sanftanlauf)");
+    // Relais-Pin initialisieren
+    pinMode(MOTOR_POWER_RELAY_PIN, OUTPUT);
+    digitalWrite(MOTOR_POWER_RELAY_PIN, LOW);
+    relayOn = false;
+    
+    Serial.println("PWM-Controller: Initialisiert (gemeinsame PWM mit Sanftanlauf + Relais)");
 }
 
 void PWMController::loop() {
-    if (!softStartActive) return;
-    
     unsigned long now = millis();
     
-    if (now - lastPWMUpdate >= SOFT_START_STEP_INTERVAL) {
+    if (softStartActive && now - lastPWMUpdate >= SOFT_START_STEP_INTERVAL) {
         updateSoftStart();
         lastPWMUpdate = now;
     }
+    
+    updateRelayControl();
 }
 
 void PWMController::updateSoftStart() {
@@ -63,6 +71,20 @@ void PWMController::updateSoftStart() {
     }
 }
 
+void PWMController::updateRelayControl() {
+    unsigned long now = millis();
+    
+    // Prüfen, ob Relais ausgeschaltet werden soll
+    if (relayShutdownPending && relayOn) {
+        if (now - lastMotorStopTime >= RELAY_POST_OFF_DELAY_MS) {
+            digitalWrite(MOTOR_POWER_RELAY_PIN, LOW);
+            relayOn = false;
+            relayShutdownPending = false;
+            Serial.printf("Relais: AUS (%lums nach letztem Motor)\n", RELAY_POST_OFF_DELAY_MS);
+        }
+    }
+}
+
 void PWMController::motorStarted(MotorDirection dir) {
     if (dir == DIR_OPEN) {
         activeMotorsOpen++;
@@ -70,13 +92,28 @@ void PWMController::motorStarted(MotorDirection dir) {
         activeMotorsClose++;
     }
     
-    if (getActiveMotorCount() == 1 && SOFT_START_ENABLED) {
-        softStartActive = true;
-        softStartBegin = millis();
-        lastPWMUpdate = softStartBegin;
-        currentPWM = SOFT_START_MIN_PWM;
-        Serial.printf("PWM-Controller: Sanftanlauf gestartet (%d->%d über %dms)\n", 
-                     SOFT_START_MIN_PWM, SOFT_START_MAX_PWM, SOFT_START_DURATION_MS);
+    // Relais einschalten, wenn erster Motor startet
+    if (getActiveMotorCount() == 1) {
+        if (!relayOn) {
+            digitalWrite(MOTOR_POWER_RELAY_PIN, HIGH);
+            relayOn = true;
+            relayShutdownPending = false;
+            Serial.printf("Relais: EIN (wartet %dms vor Motorstart)\n", RELAY_PRE_ON_DELAY_MS);
+            
+            // Warten auf Relais-Einschaltverzögerung
+            delay(RELAY_PRE_ON_DELAY_MS);
+        }
+        
+        if (SOFT_START_ENABLED) {
+            softStartActive = true;
+            softStartBegin = millis();
+            lastPWMUpdate = softStartBegin;
+            currentPWM = SOFT_START_MIN_PWM;
+            Serial.printf("PWM-Controller: Sanftanlauf gestartet (%d->%d über %dms)\n", 
+                         SOFT_START_MIN_PWM, SOFT_START_MAX_PWM, SOFT_START_DURATION_MS);
+        } else {
+            currentPWM = SOFT_START_MAX_PWM;
+        }
     } else if (!softStartActive) {
         currentPWM = SOFT_START_MAX_PWM;
     }
@@ -96,6 +133,13 @@ void PWMController::motorStopped(MotorDirection dir) {
         ledcWrite(LPWM_CHANNEL, 0);
         currentPWM = 0;
         softStartActive = false;
+        
+        // Relais-Abschaltungs-Timer starten
+        if (relayOn) {
+            lastMotorStopTime = millis();
+            relayShutdownPending = true;
+            Serial.printf("Relais: Abschaltung in %lums geplant\n", RELAY_POST_OFF_DELAY_MS);
+        }
     } else {
         updateSoftStart();
     }

@@ -2,8 +2,11 @@
 #define BUTTON_HANDLER_H
 
 #include <Arduino.h>
+#include <RCSwitch.h>
+#include <Preferences.h>
 
 #define NUM_KEYS 16
+#define NUM_RF_CODES 16
 
 class AnalogKeypad {
 private:
@@ -41,14 +44,44 @@ public:
     int loop();
 };
 
+class RFReceiver {
+private:
+    RCSwitch* rcSwitch;
+    Preferences prefs;
+    unsigned long rfCodes[NUM_RF_CODES];
+    bool learningMode;
+    int learningKey;
+    unsigned long learningStartTime;
+    
+    void loadRFCodes();
+    void saveRFCode(int key, unsigned long code);
+    int findKeyForCode(unsigned long code);
+    
+public:
+    RFReceiver();
+    void begin();
+    int loop();
+    
+    void startLearning(int key);
+    void cancelLearning();
+    bool isLearning() { return learningMode; }
+    int getLearningKey() { return learningKey; }
+    unsigned long getRFCode(int key) { return rfCodes[key]; }
+    void clearRFCode(int key);
+    void clearAllRFCodes();
+};
+
 class ButtonHandler {
 private:
     AnalogKeypad* keypad;
+    RFReceiver* rfReceiver;
     
 public:
     ButtonHandler();
     void begin();
     void loop();
+    
+    RFReceiver* getRFReceiver() { return rfReceiver; }
     
     // Motor-Callbacks
     void (*onM1Open)() = nullptr;

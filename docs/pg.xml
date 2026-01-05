@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ThreadType>
+  <Name>PG (Panzerrohr)</Name>
+  <CustomName>PG</CustomName>
+  <Unit>mm</Unit>
+  <Angle>80</Angle>
+  <SortOrder>5</SortOrder>
+  
+  <ThreadSize>
+    <Size>PG 7</Size>
+    <Designation>PG 7</Designation>
+    <CTD>12.5</CTD>
+    <Pitch>1.27</Pitch>
+    <MajorDia>12.5</MajorDia>
+    <PitchDia>11.445</PitchDia>
+    <MinorDia>10.39</MinorDia>
+  </ThreadSize>
+  
+  <ThreadSize>
+    <Size>PG 9</Size>
+    <Designation>PG 9</Designation>
+    <CTD>15.2</CTD>
+    <Pitch>1.27</Pitch>
+    <MajorDia>15.2</MajorDia>
+    <PitchDia>14.145</PitchDia>
+    <MinorDia>13.09</MinorDia>
+  </ThreadSize>
+  
+  <ThreadSize>
+    <Size>PG 11</Size>
+    <Designation>PG 11</Designation>
+    <CTD>18.6</CTD>
+    <Pitch>1.27</Pitch>
+    <MajorDia>18.6</MajorDia>
+    <PitchDia>17.545</PitchDia>
+    <MinorDia>16.49</MinorDia>
+  </ThreadSize>
+  
+  <ThreadSize>
+    <Size>PG 13.5</Size>
+    <Designation>PG 13.5</Designation>
+    <CTD>20.4</CTD>
+    <Pitch>1.27</Pitch>
+    <MajorDia>20.4</MajorDia>
+    <PitchDia>19.345</PitchDia>
+    <MinorDia>18.29</MinorDia>
+  </ThreadSize>
+  
+  <ThreadSize>
+    <Size>PG 16</Size>
+    <Designation>PG 16</Designation>
+    <CTD>22.5</CTD>
+    <Pitch>1.411</Pitch>
+    <MajorDia>22.5</MajorDia>
+    <PitchDia>21.212</PitchDia>
+    <MinorDia>19.924</MinorDia>
+  </ThreadSize>
+  
+  <ThreadSize>
+    <Size>PG 21</Size>
+    <Designation>PG 21</Designation>
+    <CTD>28.3</CTD>
+    <Pitch>1.411</Pitch>
+    <MajorDia>28.3</MajorDia>
+    <PitchDia>27.012</PitchDia>
+    <MinorDia>25.724</MinorDia>
+  </ThreadSize>
+  
+</ThreadType>

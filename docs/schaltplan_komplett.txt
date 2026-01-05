@@ -1,6 +1,6 @@
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║           VELUX ROLLADEN CONTROLLER - KOMPLETTER SCHALTPLAN                   ║
-║           ESP32 + 4x BTS7960 + 4x INA219 + Analoges Keypad                   ║
+║    ESP32 + 4x BTS7960 + 4x INA219 + Keypad + Relais + RF-Empfänger            ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -10,15 +10,15 @@
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ STROMVERSORGUNG                                                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ VIN (ESP32)    ──→  12V DC Netzteil (+)                                    │
-│ GND (ESP32)    ──→  12V DC Netzteil (-)  [GND COMMON]                      │
+│ VIN (ESP32)    ──→  12V DC Netzteil (+)                                     │
+│ GND (ESP32)    ──→  12V DC Netzteil (-)  [GND COMMON]                       │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ PWM SIGNALE (gemeinsam für alle 4 Motoren)                                 │
+│ PWM SIGNALE (gemeinsam für alle 4 Motoren)                                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ GPIO 25        ──→  RPWM (alle 4x BTS7960 parallel)                        │
-│ GPIO 26        ──→  LPWM (alle 4x BTS7960 parallel)                        │
+│ GPIO 25        ──→  RPWM (alle 4x BTS7960 parallel)                         │
+│ GPIO 26        ──→  LPWM (alle 4x BTS7960 parallel)                         │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -50,23 +50,63 @@
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ I2C BUS (INA219 Stromsensoren)                                             │
+│ I2C BUS (INA219 Stromsensoren)                                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ GPIO 21 (SDA)  ──→  INA219 #1 (0x40) SDA ┐                                 │
-│                 ──→  INA219 #2 (0x41) SDA ├─ [I2C BUS]                     │
+│ GPIO 21 (SDA)  ──→  INA219 #1 (0x40) SDA ┐                                  │
+│                 ──→  INA219 #2 (0x41) SDA ├─ [I2C BUS]                      │
 │                 ──→  INA219 #3 (0x44) SDA │                                 │
 │                 ──→  INA219 #4 (0x45) SDA ┘                                 │
 │                                                                             │
-│ GPIO 22 (SCL)  ──→  INA219 #1 (0x40) SCL ┐                                 │
-│                 ──→  INA219 #2 (0x41) SCL ├─ [I2C BUS]                     │
+│ GPIO 22 (SCL)  ──→  INA219 #1 (0x40) SCL ┐                                  │
+│                 ──→  INA219 #2 (0x41) SCL ├─ [I2C BUS]                      │
 │                 ──→  INA219 #3 (0x44) SCL │                                 │
 │                 ──→  INA219 #4 (0x45) SCL ┘                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ ANALOGES KEYPAD (16 Tasten)                                                │
+│ ANALOGES KEYPAD (16 Tasten)                                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ GPIO 34 (ADC)  ──→  Keypad Output (4x4 Matrix analog)                      │
+│ GPIO 34 (ADC)  ──→  Keypad Output (4x4 Matrix analog)                       │
+│                                                                             │
+│ Tastenbelegung:                                                             │
+│  - Tasten 0-3:  Motoren 1-4 HOCH                                            │
+│  - Tasten 4-7:  Motoren 1-4 STOP                                            │
+│  - Tasten 8-11: Motoren 1-4 RUNTER                                          │
+│  - Taste 12:    Alle HOCH                                                   │
+│  - Taste 13:    Alle RUNTER                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 433 MHz RF-EMPFÄNGER (Funkfernbedienungen)                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ GPIO 35        ──→  RF-Empfänger DATA Pin                                   │
+│ 3.3V / 5V      ──→  RF-Empfänger VCC (je nach Modul)                        │
+│ GND            ──→  RF-Empfänger GND                                        │
+│                                                                             │
+│ Features:                                                                   │
+│  - 16 anlernbare RF-Codes für alle Funktionen                               │
+│  - Speicherung im Flash (bleibt nach Neustart)                              │
+│  - 30s Lernmodus-Timeout                                                    │
+│  - RCSwitch Library (PT2262, EV1527, HT6P20B kompatibel)                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ RELAIS MOTORSTROMVERSORGUNG (Energiesparmodus)                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ GPIO 23        ──→  Relais Steuerung (HIGH = EIN, LOW = AUS)                │
+│                                                                             │
+│ Anschluss:                                                                  │
+│  - Relais schaltet 12V Stromversorgung für alle BTS7960 Module              │
+│  - Relais zwischen 12V Netzteil (+) und BTS7960 B+ Eingängen                │
+│                                                                             │
+│ Timing:                                                                     │
+│  - Einschalten: 300ms VOR Motorstart (RELAY_PRE_ON_DELAY_MS)                │
+│  - Ausschalten: 20 Sekunden NACH letztem Motor (RELAY_POST_OFF_DELAY_MS)    │
+│                                                                             │
+│ Empfohlenes Relais:                                                         │
+│  - 5V Spulenspannung (vom ESP32 VIN)                                        │
+│  - Schaltkontakt min. 10A @ 12V DC                                          │
+│  - Mit Freilaufdiode!                                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 
@@ -81,26 +121,26 @@ Jedes BTS7960 Modul steuert 1 Motor:
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  EINGANG (vom ESP32):                                                    │
-│  ├─ VCC (5V)   ──→  ESP32 VIN (oder extern 5V)                          │
+│  ├─ VCC (5V)   ──→  ESP32 VIN (oder extern 5V)                           │
 │  ├─ GND        ──→  GND COMMON                                           │
-│  ├─ RPWM       ──→  ESP32 GPIO 25 (alle parallel!)                      │
-│  ├─ LPWM       ──→  ESP32 GPIO 26 (alle parallel!)                      │
-│  ├─ R_EN       ──→  ESP32 GPIO XX (Motor-spezifisch)                    │
-│  └─ L_EN       ──→  ESP32 GPIO XX (Motor-spezifisch)                    │
+│  ├─ RPWM       ──→  ESP32 GPIO 25 (alle parallel!)                       │
+│  ├─ LPWM       ──→  ESP32 GPIO 26 (alle parallel!)                       │
+│  ├─ R_EN       ──→  ESP32 GPIO XX (Motor-spezifisch)                     │
+│  └─ L_EN       ──→  ESP32 GPIO XX (Motor-spezifisch)                     │
 │                                                                          │
 │  MOTOR POWER:                                                            │
-│  ├─ B+         ──→  12V DC (+)  [von Netzteil]                          │
-│  └─ B-         ──→  GND         [von Netzteil]                          │
+│  ├─ B+         ──→  12V DC (+)  [von Netzteil]                           │
+│  └─ B-         ──→  GND         [von Netzteil]                           │
 │                                                                          │
 │  MOTOR OUTPUT:                                                           │
-│  ├─ M+         ──→  Motor Pol 1  ────┐                                  │
-│  └─ M-         ──→  [INA219 V-]      │                                  │
+│  ├─ M+         ──→  Motor Pol 1  ────┐                                   │
+│  └─ M-         ──→  [INA219 V-]      │                                   │
 │                                       │                                  │
-│  INA219 Strommessung:                │                                  │
-│  ├─ [INA219 V+] ───────────→ Motor Pol 2                                │
-│  └─ [INA219 V-] ───────────→ M- (siehe oben)                            │
+│  INA219 Strommessung:                │                                   │
+│  ├─ [INA219 V+] ───────────→ Motor Pol 2                                 │
+│  └─ [INA219 V-] ───────────→ M- (siehe oben)                             │
 │                                                                          │
-│  HINWEIS: INA219 misst Strom zwischen BTS7960 M- und Motor!             │
+│  HINWEIS: INA219 misst Strom zwischen BTS7960 M- und Motor!              │
 │                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
 
@@ -118,20 +158,20 @@ Jedes INA219 Modul misst den Strom für 1 Motor:
 │  EINGANG (I2C):                                                          │
 │  ├─ VCC        ──→  3.3V (ESP32)                                         │
 │  ├─ GND        ──→  GND COMMON                                           │
-│  ├─ SDA        ──→  ESP32 GPIO 21 (I2C Bus)                             │
-│  └─ SCL        ──→  ESP32 GPIO 22 (I2C Bus)                             │
+│  ├─ SDA        ──→  ESP32 GPIO 21 (I2C Bus)                              │
+│  └─ SCL        ──→  ESP32 GPIO 22 (I2C Bus)                              │
 │                                                                          │
 │  I2C ADRESSEN:                                                           │
-│  ├─ INA219 #1  =  0x40  (Motor 1)                                       │
-│  ├─ INA219 #2  =  0x41  (Motor 2)                                       │
-│  ├─ INA219 #3  =  0x44  (Motor 3)                                       │
-│  └─ INA219 #4  =  0x45  (Motor 4)                                       │
+│  ├─ INA219 #1  =  0x40  (Motor 1)                                        │
+│  ├─ INA219 #2  =  0x41  (Motor 2)                                        │
+│  ├─ INA219 #3  =  0x44  (Motor 3)                                        │
+│  └─ INA219 #4  =  0x45  (Motor 4)                                        │
 │                                                                          │
-│  STROMMESSUNG (im Motor-Kreislauf):                                     │
+│  STROMMESSUNG (im Motor-Kreislauf):                                      │
 │  ├─ V+         ──→  Motor Pol 2                                          │
 │  └─ V-         ──→  BTS7960 M-                                           │
 │                                                                          │
-│  ADRESSIERUNG (Löt-Jumper):                                             │
+│  ADRESSIERUNG (Löt-Jumper):                                              │
 │  ├─ 0x40: keine Jumper                                                   │
 │  ├─ 0x41: A0 geschlossen                                                 │
 │  ├─ 0x44: A1 geschlossen                                                 │
@@ -191,7 +231,7 @@ Jedes INA219 Modul misst den Strom für 1 Motor:
 │  Anschluss:                                                              │
 │  ├─ VCC        ──→  3.3V (ESP32)                                         │
 │  ├─ GND        ──→  GND COMMON                                           │
-│  └─ OUT        ──→  ESP32 GPIO 34 (ADC1_CH6)                            │
+│  └─ OUT        ──→  ESP32 GPIO 34 (ADC1_CH6)                             │
 │                                                                          │
 │  Funktionen (16 Tasten):                                                 │
 │  ├─ 0-3:    Motor 1-4 AUF                                                │
@@ -202,9 +242,9 @@ Jedes INA219 Modul misst den Strom für 1 Motor:
 │  └─ 14-15:  Reserve                                                      │
 │                                                                          │
 │  Funktionsweise:                                                         │
-│  - Jede Taste hat einen eigenen Widerstandswert                         │
-│  - ESP32 liest analoge Spannung (0-3.3V)                                │
-│  - Software erkennt Taste anhand Spannungswert                          │
+│  - Jede Taste hat einen eigenen Widerstandswert                          │
+│  - ESP32 liest analoge Spannung (0-3.3V)                                 │
+│  - Software erkennt Taste anhand Spannungswert                           │
 │                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
 
@@ -217,7 +257,7 @@ Jedes INA219 Modul misst den Strom für 1 Motor:
 │                                                                          │
 │   230V AC                                                                │
 │     │                                                                    │
-│     └──► [Netzteil 12V DC / 10A+]                                       │
+│     └──► [Netzteil 12V DC / 10A+]                                        │
 │              │                                                           │
 │              ├──► ESP32 VIN                                              │
 │              ├──► BTS7960 #1  B+                                         │
@@ -236,11 +276,11 @@ Jedes INA219 Modul misst den Strom für 1 Motor:
 │                                  ├─── INA219 #4 GND                      │
 │                                  └─── Keypad GND                         │
 │                                                                          │
-│   ESP32 3.3V ────┬─── INA219 #1 VCC                                     │
-│                  ├─── INA219 #2 VCC                                     │
-│                  ├─── INA219 #3 VCC                                     │
-│                  ├─── INA219 #4 VCC                                     │
-│                  └─── Keypad VCC                                        │
+│   ESP32 3.3V ────┬─── INA219 #1 VCC                                      │
+│                  ├─── INA219 #2 VCC                                      │
+│                  ├─── INA219 #3 VCC                                      │
+│                  ├─── INA219 #4 VCC                                      │
+│                  └─── Keypad VCC                                         │
 │                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
 

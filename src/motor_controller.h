@@ -94,7 +94,12 @@ private:
     static unsigned long softStartBegin;
     static unsigned long lastPWMUpdate;
     
+    static bool relayOn;
+    static unsigned long lastMotorStopTime;
+    static bool relayShutdownPending;
+    
     static void updateSoftStart();
+    static void updateRelayControl();
     
 public:
     static void begin();
@@ -111,6 +116,7 @@ public:
     
     static uint8_t getActiveMotorCount() { return activeMotorsOpen + activeMotorsClose; }
     static bool hasConflict() { return (activeMotorsOpen > 0 && activeMotorsClose > 0); }
+    static bool isRelayOn() { return relayOn; }
 };
 
 #endif

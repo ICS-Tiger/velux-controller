@@ -144,6 +144,27 @@ void handleLearn(MotorController* motor, const char* type) {
     }
 }
 
+// RF Learn Handler
+void handleRFLearn(int key) {
+    if (key < 0 || key >= NUM_RF_CODES) {
+        Serial.printf("RF-Lernmodus: Ungültige Taste %d\n", key);
+        return;
+    }
+    
+    buttons->getRFReceiver()->startLearning(key);
+}
+
+// RF Code löschen
+void handleRFClear(int key) {
+    if (key < 0) {
+        buttons->getRFReceiver()->clearAllRFCodes();
+        Serial.println("Alle RF-Codes gelöscht");
+    } else if (key < NUM_RF_CODES) {
+        buttons->getRFReceiver()->clearRFCode(key);
+        Serial.printf("RF-Code %d gelöscht\n", key);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
