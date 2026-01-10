@@ -4,44 +4,55 @@
 #include <Arduino.h>
 #include <RCSwitch.h>
 #include <Preferences.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/queue.h>
 
 #define NUM_KEYS 16
 #define NUM_RF_CODES 16
 
+// Konstanten für die verbesserte Tastenerkennung
+#define KEYPAD_THRESHOLD 500        // Mindest-ADC-Wert für "Taste gedrückt"
+#define KEYPAD_TOLERANCE 50         // Toleranz für Ausreißer-Erkennung
+#define KEYPAD_MIN_GUETE 75.0       // Mindest-Güte in Prozent
+#define KEYPAD_RELEASE_COUNT 5      // Anzahl Messungen < threshold für "losgelassen"
+#define KEYPAD_MIN_MESSUNGEN 10     // Mindestanzahl gültiger Messungen
+#define KEYPAD_MAX_MESSUNGEN 1000   // Maximale Anzahl Messungen
+#define KEYPAD_MESS_INTERVAL 10     // Intervall zwischen Messungen in ms
+
 class AnalogKeypad {
 private:
     uint8_t pin;
-    int lastKey;
-    unsigned long lastPressTime;
-    unsigned long lastReadTime;
-    bool keyPressed;
+    bool measuring;                 // Aktuell in Messung?
+    unsigned long lastReadTime;     // Für non-blocking Timing
     
-    // ADC-Schwellwerte für 16 Tasten (anpassbar nach Kalibrierung)
-    const int thresholds[NUM_KEYS] = {
-        50,   // Taste 0
-        200,  // Taste 1
-        350,  // Taste 2
-        500,  // Taste 3
-        650,  // Taste 4
-        800,  // Taste 5
-        950,  // Taste 6
-        1100, // Taste 7
-        1250, // Taste 8
-        1400, // Taste 9
-        1550, // Taste 10
-        1700, // Taste 11
-        1850, // Taste 12
-        2000, // Taste 13
-        2150, // Taste 14
-        2300  // Taste 15
-    };
+    // Kalibrierwerte für 16 Tasten (ADC-Werte)
+    int tastenWerte[NUM_KEYS];
+    int anzahlTasten;
     
-    int readKey();
+    // Standard-Kalibrierung (kann über setCalibration geändert werden)
+    String kalibrierung;
+    
+    // Messdaten
+    int messwerte[KEYPAD_MAX_MESSUNGEN];
+    int anzahlMessungen;
+    int unterSchwellwert;
+    long summe;
+    
+    void parseKalibrierung();
+    int berechneTaste();
     
 public:
     AnalogKeypad(uint8_t adcPin);
     void begin();
     int loop();
+    
+    // Kalibrierung setzen (Format: "1:4095,2:3697,3:3202,...")
+    void setCalibration(const String& calibration);
+    String getCalibration() { return kalibrierung; }
+    
+    // Debug-Ausgabe aktivieren/deaktivieren
+    bool debugOutput;
 };
 
 class RFReceiver {
@@ -75,6 +86,13 @@ class ButtonHandler {
 private:
     AnalogKeypad* keypad;
     RFReceiver* rfReceiver;
+    
+    // FreeRTOS Task für Keypad auf Core 0
+    static TaskHandle_t keypadTaskHandle;
+    static QueueHandle_t keyQueue;
+    static ButtonHandler* instance;
+    static void keypadTask(void* parameter);
+    void processKey(int key);
     
 public:
     ButtonHandler();

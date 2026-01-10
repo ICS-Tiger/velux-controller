@@ -12,7 +12,7 @@
 #define OTA_PASSWORD "velux2026"
 
 // ===== MQTT =====
-#define MQTT_SERVER "192.168.0.22"
+#define MQTT_SERVER "192.168.1.77"
 #define MQTT_PORT 1883
 #define MQTT_USER "bossi"
 #define MQTT_PASSWORD "bigboss1"
@@ -27,6 +27,7 @@
 
 // Relais für Motorstromversorgung
 #define MOTOR_POWER_RELAY_PIN 23
+#define RELAY_ACTIVE_LOW true           // true = LOW schaltet Relais EIN (invertiert)
 #define RELAY_PRE_ON_DELAY_MS 300      // Relais schaltet 300ms VOR Motoren ein
 #define RELAY_POST_OFF_DELAY_MS 20000  // Relais schaltet 20s NACH letztem Motor aus
 
@@ -41,6 +42,8 @@
 #define M4_L_EN 19
 
 // ===== INA219 Stromsensoren =====
+#define INA219_ENABLED false  // Auf true setzen wenn INA219 angeschlossen
+
 #define INA219_ADDR_M1 0x40
 #define INA219_ADDR_M2 0x41
 #define INA219_ADDR_M3 0x44
@@ -56,7 +59,11 @@
 #define KEYPAD_DEBOUNCE_MS 50
 #define KEYPAD_READ_INTERVAL 50
 
-// Tastenbelegung:
+// Standard-Kalibrierung für die Analog-Tastatur
+// Format: "Taste:ADC-Wert,..."  (Taste 1-16)
+#define KEYPAD_DEFAULT_CALIBRATION "1:4095,2:3697,3:3202,4:2864,5:2412,6:2250,7:2114,8:1986,9:1758,10:1672,11:1593,12:1512,13:1373,14:1072,15:869,16:729"
+
+// Tastenbelegung (0-basiert, Tasten 0-15):
 // 0-3: Motor 1-4 AUF
 // 4-7: Motor 1-4 STOP  
 // 8-11: Motor 1-4 ZU

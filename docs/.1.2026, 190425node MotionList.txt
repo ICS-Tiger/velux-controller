@@ -1,0 +1,313 @@
+.1.2026, 19:04:25node: MotionList
+BluMotion/Motion : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 129, battery: 100, illuminance: 0 … }
+5.1.2026, 19:04:25node: Process Motion & Illuminance
+function : (warn)
+"[38:39:8f:9a:d9:2d] Motion: 1, Illuminance: 0, Light: off, Source: manual"
+5.1.2026, 19:04:25node: Process Motion & Illuminance
+function : (warn)
+"[38:39:8f:9a:d9:2d] Motion triggered: Turning light ON"
+5.1.2026, 19:04:25node: IlluminanceList
+BluMotion/Illuminance : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 129, battery: 100, illuminance: 0 … }
+5.1.2026, 19:04:25node: StatusList
+BluMotion/Status : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 129, battery: 100, illuminance: 0 … }
+5.1.2026, 19:04:27node: MotionList
+BluMotion/Motion : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 22, battery: 100, illuminance: 23 … }
+5.1.2026, 19:04:27node: Process Motion & Illuminance
+function : (warn)
+"[3c:2e:f5:bd:5d:79] Motion: 1, Illuminance: 23, Light: off, Source: manual"
+5.1.2026, 19:04:27node: Process Motion & Illuminance
+function : (warn)
+"[3c:2e:f5:bd:5d:79] Motion triggered: Turning light ON"
+5.1.2026, 19:04:27node: IlluminanceList
+BluMotion/Illuminance : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 22, battery: 100, illuminance: 23 … }
+5.1.2026, 19:04:27node: StatusList
+BluMotion/Status : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 22, battery: 100, illuminance: 23 … }
+5.1.2026, 19:05:00node: 192.168.1.78
+msg : string[24]
+"ping timeout HmIP-RF 750"
+5.1.2026, 19:05:29node: MotionList
+BluMotion/Motion : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 23, battery: 100, illuminance: 37 … }
+5.1.2026, 19:05:29node: IlluminanceList
+BluMotion/Illuminance : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 23, battery: 100, illuminance: 37 … }
+5.1.2026, 19:05:29node: Process Motion & Illuminance
+function : (warn)
+"[3c:2e:f5:bd:5d:79] Motion: 0, Illuminance: 37, Light: on, Source: motion"
+5.1.2026, 19:05:29node: Process Motion & Illuminance
+function : (warn)
+"[3c:2e:f5:bd:5d:79] Motion ended or bright: Turning light OFF"
+5.1.2026, 19:05:29node: StatusList
+BluMotion/Status : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 23, battery: 100, illuminance: 37 … }
+5.1.2026, 19:05:32node: MotionList
+BluMotion/Motion : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 130, battery: 100, illuminance: 40 … }
+5.1.2026, 19:05:32node: Process Motion & Illuminance
+function : (warn)
+"[38:39:8f:9a:d9:2d] Motion: 0, Illuminance: 40, Light: on, Source: motion"
+5.1.2026, 19:05:32node: Process Motion & Illuminance
+function : (warn)
+"[38:39:8f:9a:d9:2d] Motion ended or bright: Turning light OFF"
+5.1.2026, 19:05:32node: IlluminanceList
+BluMotion/Illuminance : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 130, battery: 100, illuminance: 40 … }
+5.1.2026, 19:05:32node: StatusList
+BluMotion/Status : msg.payload : Object
+{ encryption: false, BTHome_version: 2, pid: 130, battery: 100, illuminance: 40 … }
+
+-- Letzte Motion-Events pro Sensor
+SELECT 
+*    sensor_adresse,
+    zeitstempel,
+    motion,
+    illuminance,
+    battery,
+    rssi
+select * FROM motions 
+ORDER BY zeitstempel DESC 
+LIMIT 50;
+
+-- Motion-Aktivität der letzten 24h
+SELECT 
+    sensor_adresse,
+    DATE_FORMAT(zeitstempel, '%H:00') as stunde,
+    COUNT(*) as anzahl_bewegungen,
+    AVG(illuminance) as durchschn_helligkeit,
+    MIN(battery) as min_battery
+FROM motions 
+WHERE zeitstempel >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+  AND motion = 1
+GROUP BY sensor_adresse, stunde
+ORDER BY sensor_adresse, stunde;
+
+-- Sensor mit schlechtestem RSSI (Funk-Qualität)
+SELECT 
+    sensor_adresse,
+    AVG(rssi) as durchschn_rssi,
+    MIN(rssi) as min_rssi,
+    COUNT(*) as messungen
+FROM motions 
+WHERE zeitstempel >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+GROUP BY sensor_adresse
+ORDER BY durchschn_rssi ASC;
+
+-- Battery-Status aller Sensoren
+SELECT 
+    sensor_adresse,
+    battery,
+    zeitstempel
+FROM motions 
+WHERE (sensor_adresse, zeitstempel) IN (
+    SELECT sensor_adresse, MAX(zeitstempel)
+    FROM motions
+    GROUP BY sensor_adresse
+)
+ORDER BY battery ASC;
+
+
+SELECT 
+    m.id,
+    m.zeitstempel,
+    s.sensor_name,
+    s.raum,
+    s.mac_adresse,
+    m.motion ,
+    m.illuminance ,
+    m.battery,
+    m.rssi ,
+    m.pid
+FROM motions m
+JOIN sensors s ON m.sensor_id = s.id
+WHERE m.zeitstempel >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+ORDER BY m.zeitstempel DESC;
+
+
+-- Alle Events der letzten 24h mit schöner Formatierung
+-- Korrigierte Version (signal umbenannt zu signalstaerke)
+SELECT 
+    DATE_FORMAT(m.zeitstempel, '%d.%m.%Y %H:%i:%s') as zeit,
+    s.sensor_name as sensor,
+    s.raum,
+    CASE 
+        WHEN m.motion = 1 THEN '🔴 Bewegung' 
+        ELSE '🟢 Ruhe' 
+    END as status,
+    CONCAT(m.illuminance, ' Lux') as helligkeit,
+    CONCAT(m.battery, '%') as batterie,
+    CONCAT(m.rssi, ' dBm') as signalstaerke
+FROM motions m
+JOIN sensors s ON m.sensor_id = s.id
+WHERE m.zeitstempel >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+ORDER BY m.zeitstempel DESC;
+
+-- Oder mit Backticks (wenn du signal behalten willst)
+SELECT 
+    DATE_FORMAT(m.zeitstempel, '%d.%m.%Y %H:%i:%s') as zeit,
+    s.sensor_name as sensor,
+    s.raum,
+    CASE 
+        WHEN m.motion = 1 THEN '🔴 Bewegung' 
+        ELSE '🟢 Ruhe' 
+    END as status,
+    CONCAT(m.illuminance, ' Lux') as helligkeit,
+    CONCAT(m.battery, '%') as batterie,
+    CONCAT(m.rssi, ' dBm') as `signal`
+FROM motions m
+JOIN sensors s ON m.sensor_id = s.id
+WHERE m.zeitstempel >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+ORDER BY m.zeitstempel DESC;-- Nur Bewegungs-Events (motion = 1)
+SELECT 
+    DATE_FORMAT(m.zeitstempel, '%H:%i:%s') as uhrzeit,
+    s.sensor_name as sensor,
+    s.raum,
+    m.illuminance as lux,
+    m.battery,
+    m.rssi
+FROM motions m
+JOIN sensors s ON m.sensor_id = s.id
+WHERE m.zeitstempel >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+  AND m.motion = 1
+ORDER BY m.zeitstempel DESC;
+
+-- Letzter Status aller Sensoren
+SELECT 
+    s.sensor_name,
+    s.raum,
+    DATE_FORMAT(m.zeitstempel, '%H:%i:%s') as letzte_aktivitaet,
+    TIMESTAMPDIFF(MINUTE, m.zeitstempel, NOW()) as minuten_her,
+    CASE 
+        WHEN m.motion = 1 THEN '🔴 Bewegung' 
+        ELSE '🟢 Ruhe' 
+    END as status,
+    m.illuminance as lux,
+    m.battery,
+    m.rssi
+FROM sensors s
+LEFT JOIN motions m ON s.id = m.sensor_id 
+    AND m.id = (SELECT MAX(id) FROM motions WHERE sensor_id = s.id)
+ORDER BY m.zeitstempel DESC;
+
+-- Bewegungs-Timeline (wer wann aktiv war)
+SELECT 
+    DATE_FORMAT(m.zeitstempel, '%H:%i:%s') as zeit,
+    s.sensor_name,
+    s.raum,
+    m.illuminance as lux
+FROM motions m
+JOIN sensors s ON m.sensor_id = s.id
+WHERE m.motion = 1
+  AND m.zeitstempel >= DATE_SUB(NOW(), INTERVAL 2 HOUR)
+ORDER BY m.zeitstempel DESC;
+
+-- Aktivitäts-Statistik pro Sensor (letzte 24h)
+SELECT 
+    s.sensor_name,
+    s.raum,
+    COUNT(*) as total_events,
+    SUM(CASE WHEN m.motion = 1 THEN 1 ELSE 0 END) as bewegungen,
+    MIN(DATE_FORMAT(m.zeitstempel, '%H:%i')) as erste_bewegung,
+    MAX(DATE_FORMAT(m.zeitstempel, '%H:%i')) as letzte_bewegung,
+    ROUND(AVG(m.illuminance), 0) as durchschn_lux,
+    MIN(m.battery) as battery,
+    ROUND(AVG(m.rssi), 0) as durchschn_signal
+FROM motions m
+JOIN sensors s ON m.sensor_id = s.id
+WHERE m.zeitstempel >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+GROUP BY s.sensor_name, s.raum
+ORDER BY bewegungen DESC;
+
+-- Treppenbewegungen korrelieren (rauf/runter Erkennung)
+SELECT 
+    DATE_FORMAT(LEAST(m1.zeitstempel, m2.zeitstempel), '%H:%i:%s') as zeit,
+    CASE 
+        WHEN m1.zeitstempel < m2.zeitstempel THEN '⬆️ Hoch (Oben → Unten)'
+        WHEN m1.zeitstempel > m2.zeitstempel THEN '⬇️ Runter (Unten → Oben)'
+        ELSE '⏸️ Gleichzeitig'
+    END as richtung,
+    ABS(TIMESTAMPDIFF(SECOND, m1.zeitstempel, m2.zeitstempel)) as sekunden_diff,
+    m1.illuminance as lux_oben,
+    m2.illuminance as lux_unten
+FROM motions m1
+JOIN motions m2 ON ABS(TIMESTAMPDIFF(SECOND, m1.zeitstempel, m2.zeitstempel)) <= 10
+WHERE m1.sensor_name = 'Motion_Treppe_Oben'
+  AND m2.sensor_name = 'Motion_Treppe_Unten'
+  AND m1.motion = 1 
+  AND m2.motion = 1
+  AND m1.zeitstempel >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+ORDER BY LEAST(m1.zeitstempel, m2.zeitstempel) DESC;
+
+-- Stündliche Aktivität (Heatmap-Daten)
+SELECT 
+    DATE_FORMAT(m.zeitstempel, '%H:00') as stunde,
+    SUM(CASE WHEN s.sensor_name = 'Motion_Eingang' THEN 1 ELSE 0 END) as eingang,
+    SUM(CASE WHEN s.sensor_name = 'Motion_Treppe_Oben' THEN 1 ELSE 0 END) as treppe_oben,
+    SUM(CASE WHEN s.sensor_name = 'Motion_Treppe_Unten' THEN 1 ELSE 0 END) as treppe_unten,
+    SUM(CASE WHEN s.sensor_name = 'Motion_Gang_Unten' THEN 1 ELSE 0 END) as gang_unten
+FROM motions m
+JOIN sensors s ON m.sensor_id = s.id
+WHERE m.motion = 1
+  AND m.zeitstempel >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+GROUP BY stunde
+ORDER BY stunde;
+
+-- Schwaches Signal (RSSI < -80 dBm)
+SELECT 
+    DATE_FORMAT(m.zeitstempel, '%H:%i:%s') as zeit,
+    s.sensor_name,
+    s.raum,
+    m.rssi,
+    CASE 
+        WHEN m.rssi < -85 THEN '🔴 Sehr schwach'
+        WHEN m.rssi < -80 THEN '🟠 Schwach'
+        ELSE '🟢 OK'
+    END as signal_qualitaet
+FROM motions m
+JOIN sensors s ON m.sensor_id = s.id
+WHERE m.rssi < -80
+  AND m.zeitstempel >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+ORDER BY m.rssi ASC;
+
+
+SELECT 
+    m.id,
+    DATE_FORMAT(m.zeitstempel, '%d.%m.%Y %H:%i:%s') as zeit,
+    s.sensor_name as sensor,
+    s.raum,
+    CASE 
+        WHEN m.motion = 1 THEN '🔴 Bewegung' 
+        ELSE '🟢 Ruhe' 
+    END as status,
+    CONCAT(m.illuminance, ' Lux') as helligkeit,
+    CONCAT(m.battery, '%') as batterie,
+    CONCAT(m.rssi, ' dBm') as signalstaerke
+FROM motions m
+JOIN sensors s ON m.sensor_id = s.id
+ORDER BY m.id DESC
+LIMIT 100;
+
+
+
+SELECT 
+    m.id,
+    DATE_FORMAT(m.zeitstempel, '%d.%m.%Y %H:%i:%s') as zeit,
+    s.sensor_name as sensor,
+    s.raum,
+    CASE 
+        WHEN m.motion = 1 THEN '* MOTION *' 
+        ELSE '  still  ' 
+    END as status,
+    CONCAT(m.illuminance, ' Lux') as helligkeit,
+    CONCAT(m.battery, '%') as batterie,
+    CONCAT(m.rssi, ' dBm') as signalstaerke
+FROM motions m
+JOIN sensors s ON m.sensor_id = s.id
+WHERE m.zeitstempel >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+ORDER BY m.zeitstempel DESC;
+

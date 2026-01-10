@@ -1,74 +1,196 @@
 #include "button_handler.h"
 #include "config.h"
 
-// ===== AnalogKeypad =====
+// ===== AnalogKeypad (Verbesserte Mehrfach-Messung mit Güteprüfung - NON-BLOCKING) =====
 
 AnalogKeypad::AnalogKeypad(uint8_t adcPin) {
     pin = adcPin;
-    lastKey = -1;
-    lastPressTime = 0;
+    measuring = false;
+    anzahlTasten = 0;
+    anzahlMessungen = 0;
+    unterSchwellwert = 0;
+    summe = 0;
     lastReadTime = 0;
-    keyPressed = false;
+    debugOutput = true;
+    
+    // Standard-Kalibrierung (deine ermittelten Werte)
+    kalibrierung = "1:4095,2:3697,3:3202,4:2864,5:2412,6:2250,7:2114,8:1986,9:1758,10:1672,11:1593,12:1512,13:1373,14:1072,15:869,16:729";
+    
+    for (int i = 0; i < NUM_KEYS; i++) {
+        tastenWerte[i] = 0;
+    }
 }
 
 void AnalogKeypad::begin() {
     pinMode(pin, INPUT);
     
     // ADC konfigurieren
-    adcAttachPin(pin);
-    analogSetPinAttenuation(pin, ADC_11db); // 0-3.3V Range
-    analogReadResolution(12); // 12-bit (0-4095)
+    analogSetAttenuation(ADC_11db);  // 0-3.3V Range
+    analogReadResolution(12);        // 12-bit (0-4095)
+    
+    // Kalibrierwerte laden
+    parseKalibrierung();
     
     Serial.printf("✓ Analoges Keypad initialisiert auf GPIO %d\n", pin);
+    Serial.printf("  %d Tasten kalibriert, Schwellwert: %d\n", anzahlTasten, KEYPAD_THRESHOLD);
 }
 
-int AnalogKeypad::readKey() {
-    int adcValue = analogRead(pin);
+void AnalogKeypad::parseKalibrierung() {
+    int startIndex = 0;
+    anzahlTasten = 0;
     
-    // Keine Taste gedrückt (niedriger Wert nahe 0)
-    if (adcValue < 50) {
+    while (startIndex < (int)kalibrierung.length() && anzahlTasten < NUM_KEYS) {
+        int kommaIndex = kalibrierung.indexOf(',', startIndex);
+        if (kommaIndex == -1) {
+            kommaIndex = kalibrierung.length();
+        }
+        
+        String eintrag = kalibrierung.substring(startIndex, kommaIndex);
+        int doppelpunktIndex = eintrag.indexOf(':');
+        
+        if (doppelpunktIndex > 0) {
+            int wert = eintrag.substring(doppelpunktIndex + 1).toInt();
+            tastenWerte[anzahlTasten] = wert;
+            anzahlTasten++;
+        }
+        
+        startIndex = kommaIndex + 1;
+    }
+    
+    if (debugOutput) {
+        Serial.print("Kalibrierwerte geladen: ");
+        Serial.print(anzahlTasten);
+        Serial.println(" Tasten");
+    }
+}
+
+void AnalogKeypad::setCalibration(const String& calibration) {
+    kalibrierung = calibration;
+    parseKalibrierung();
+}
+
+int AnalogKeypad::berechneTaste() {
+    // Mindestens KEYPAD_MIN_MESSUNGEN erforderlich
+    if (anzahlMessungen < KEYPAD_MIN_MESSUNGEN) {
+        if (debugOutput) Serial.println("Keypad: Zu wenige Messwerte!");
         return -1;
     }
     
-    // Finde die nächstliegende Taste
-    int closestKey = -1;
-    int minDiff = 9999;
+    // Erster Mittelwert
+    float mittelwert1 = summe / (float)anzahlMessungen;
     
-    for (int i = 0; i < NUM_KEYS; i++) {
-        int diff = abs(adcValue - thresholds[i]);
-        if (diff < minDiff && diff < 100) { // Toleranz von ±100
-            minDiff = diff;
-            closestKey = i;
+    // Bereinigter Mittelwert (ohne Ausreißer)
+    long summeBereinigt = 0;
+    int anzahlGueltig = 0;
+    
+    for (int i = 0; i < anzahlMessungen; i++) {
+        float abweichung = abs(messwerte[i] - mittelwert1);
+        
+        if (abweichung <= KEYPAD_TOLERANCE) {
+            summeBereinigt += messwerte[i];
+            anzahlGueltig++;
         }
     }
     
-    return closestKey;
+    if (anzahlGueltig == 0) {
+        if (debugOutput) Serial.println("Keypad: Keine gültigen Werte!");
+        return -1;
+    }
+    
+    int mittelwertBereinigt = summeBereinigt / anzahlGueltig;
+    float guete = (anzahlGueltig / (float)anzahlMessungen) * 100.0;
+    
+    // Debug-Ausgabe
+    if (debugOutput) {
+        Serial.print("Keypad: Messungen: ");
+        Serial.print(anzahlMessungen);
+        Serial.print(" | Wert: ");
+        Serial.print(mittelwertBereinigt);
+        Serial.print(" | Güte: ");
+        Serial.print(guete, 1);
+        Serial.print("%");
+    }
+    
+    // Güte prüfen
+    if (guete < KEYPAD_MIN_GUETE) {
+        if (debugOutput) Serial.println(" -> Güte zu schlecht!");
+        return -1;
+    }
+    
+    // Nächstgelegene Taste finden
+    int naechsteTaste = -1;
+    int kleinsterAbstand = 9999;
+    
+    for (int i = 0; i < anzahlTasten; i++) {
+        int abstand = abs(tastenWerte[i] - mittelwertBereinigt);
+        
+        if (abstand < kleinsterAbstand) {
+            kleinsterAbstand = abstand;
+            naechsteTaste = i;  // 0-basiert (Taste 0-15)
+        }
+    }
+    
+    if (debugOutput) {
+        Serial.print(" | Abstand: ");
+        Serial.print(kleinsterAbstand);
+        Serial.print(" -> Taste ");
+        Serial.println(naechsteTaste);
+    }
+    
+    return naechsteTaste;
 }
 
 int AnalogKeypad::loop() {
     unsigned long now = millis();
     
-    // Nur alle KEYPAD_READ_INTERVAL ms lesen
-    if (now - lastReadTime < KEYPAD_READ_INTERVAL) {
+    // Non-blocking: Nur alle KEYPAD_MESS_INTERVAL ms messen
+    if (now - lastReadTime < KEYPAD_MESS_INTERVAL) {
         return -1;
     }
     lastReadTime = now;
     
-    int currentKey = readKey();
+    int currentValue = analogRead(pin);
     
-    // Taste wurde gedrückt (Flanke)
-    if (currentKey != -1 && lastKey == -1) {
-        if (!keyPressed) {
-            keyPressed = true;
-            lastPressTime = now;
-            lastKey = currentKey;
-            return currentKey;
+    // Taste wurde gedrückt (über Schwellwert)
+    if (currentValue > KEYPAD_THRESHOLD) {
+        if (!measuring) {
+            // Neue Messung starten
+            measuring = true;
+            anzahlMessungen = 0;
+            unterSchwellwert = 0;
+            summe = 0;
         }
+        
+        // Messwert aufnehmen
+        if (anzahlMessungen < KEYPAD_MAX_MESSUNGEN) {
+            messwerte[anzahlMessungen] = currentValue;
+            summe += currentValue;
+            anzahlMessungen++;
+        }
+        unterSchwellwert = 0;  // Reset Counter
+        
+        return -1;  // Noch in Messung
     }
-    // Taste wurde losgelassen
-    else if (currentKey == -1 && lastKey != -1) {
-        keyPressed = false;
-        lastKey = -1;
+    else {
+        // Unter Schwellwert
+        if (measuring) {
+            unterSchwellwert++;
+            
+            // Taste losgelassen? (KEYPAD_RELEASE_COUNT mal unter Schwellwert)
+            if (unterSchwellwert >= KEYPAD_RELEASE_COUNT) {
+                measuring = false;
+                
+                // Taste berechnen
+                int taste = berechneTaste();
+                
+                // Reset für nächste Messung
+                anzahlMessungen = 0;
+                unterSchwellwert = 0;
+                summe = 0;
+                
+                return taste;
+            }
+        }
     }
     
     return -1;
@@ -212,22 +334,64 @@ int RFReceiver::loop() {
     return -1;
 }
 
-// ===== ButtonHandler =====
+// ===== ButtonHandler mit FreeRTOS Task auf Core 0 =====
+
+TaskHandle_t ButtonHandler::keypadTaskHandle = nullptr;
+QueueHandle_t ButtonHandler::keyQueue = nullptr;
+ButtonHandler* ButtonHandler::instance = nullptr;
 
 ButtonHandler::ButtonHandler() {
     keypad = new AnalogKeypad(KEYPAD_PIN);
     rfReceiver = new RFReceiver();
+    instance = this;
+}
+
+// Keypad-Task läuft auf Core 0 (unabhängig vom Hauptloop)
+void ButtonHandler::keypadTask(void* parameter) {
+    AnalogKeypad* kp = (AnalogKeypad*)parameter;
+    
+    Serial.println("Keypad-Task gestartet auf Core 0");
+    
+    for (;;) {
+        int key = kp->loop();
+        
+        if (key != -1) {
+            // Taste erkannt -> in Queue senden
+            xQueueSend(keyQueue, &key, 0);
+        }
+        
+        vTaskDelay(1);  // Minimal delay für Watchdog
+    }
 }
 
 void ButtonHandler::begin() {
     keypad->begin();
     rfReceiver->begin();
-    Serial.println("✓ Button Handler initialisiert (16-Tasten Analog Keypad + RF-Empfänger)");
+    
+    // Queue für Tastenübertragung erstellen (max 10 Tasten puffern)
+    keyQueue = xQueueCreate(10, sizeof(int));
+    
+    // Keypad-Task auf Core 0 starten (Core 1 = Arduino loop)
+    xTaskCreatePinnedToCore(
+        keypadTask,           // Task-Funktion
+        "KeypadTask",         // Name
+        4096,                 // Stack-Größe
+        keypad,               // Parameter (Keypad-Objekt)
+        2,                    // Priorität (höher = wichtiger)
+        &keypadTaskHandle,    // Task-Handle
+        0                     // Core 0 (nicht Core 1 wo loop() läuft)
+    );
+    
+    Serial.println("✓ Button Handler initialisiert (Keypad auf Core 0, RF auf Core 1)");
 }
 
 void ButtonHandler::loop() {
-    // Keypad prüfen
-    int key = keypad->loop();
+    int key = -1;
+    
+    // Keypad: Taste aus Queue lesen (non-blocking)
+    if (xQueueReceive(keyQueue, &key, 0) == pdTRUE) {
+        // Taste aus Queue erhalten
+    }
     
     // Wenn keine Keypad-Taste, dann RF prüfen
     if (key == -1) {

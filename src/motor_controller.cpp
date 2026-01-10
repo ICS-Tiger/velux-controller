@@ -20,9 +20,13 @@ void PWMController::begin() {
     ledcWrite(RPWM_CHANNEL, 0);
     ledcWrite(LPWM_CHANNEL, 0);
     
-    // Relais-Pin initialisieren
+    // Relais-Pin initialisieren (invertiert: HIGH = AUS bei RELAY_ACTIVE_LOW)
     pinMode(MOTOR_POWER_RELAY_PIN, OUTPUT);
-    digitalWrite(MOTOR_POWER_RELAY_PIN, LOW);
+    #if RELAY_ACTIVE_LOW
+    digitalWrite(MOTOR_POWER_RELAY_PIN, HIGH);  // Invertiert: HIGH = AUS
+    #else
+    digitalWrite(MOTOR_POWER_RELAY_PIN, LOW);   // Normal: LOW = AUS
+    #endif
     relayOn = false;
     
     Serial.println("PWM-Controller: Initialisiert (gemeinsame PWM mit Sanftanlauf + Relais)");
@@ -77,7 +81,11 @@ void PWMController::updateRelayControl() {
     // Prüfen, ob Relais ausgeschaltet werden soll
     if (relayShutdownPending && relayOn) {
         if (now - lastMotorStopTime >= RELAY_POST_OFF_DELAY_MS) {
-            digitalWrite(MOTOR_POWER_RELAY_PIN, LOW);
+            #if RELAY_ACTIVE_LOW
+            digitalWrite(MOTOR_POWER_RELAY_PIN, HIGH);  // Invertiert: HIGH = AUS
+            #else
+            digitalWrite(MOTOR_POWER_RELAY_PIN, LOW);   // Normal: LOW = AUS
+            #endif
             relayOn = false;
             relayShutdownPending = false;
             Serial.printf("Relais: AUS (%lums nach letztem Motor)\n", RELAY_POST_OFF_DELAY_MS);
@@ -95,7 +103,11 @@ void PWMController::motorStarted(MotorDirection dir) {
     // Relais einschalten, wenn erster Motor startet
     if (getActiveMotorCount() == 1) {
         if (!relayOn) {
-            digitalWrite(MOTOR_POWER_RELAY_PIN, HIGH);
+            #if RELAY_ACTIVE_LOW
+            digitalWrite(MOTOR_POWER_RELAY_PIN, LOW);   // Invertiert: LOW = EIN
+            #else
+            digitalWrite(MOTOR_POWER_RELAY_PIN, HIGH);  // Normal: HIGH = EIN
+            #endif
             relayOn = true;
             relayShutdownPending = false;
             Serial.printf("Relais: EIN (wartet %dms vor Motorstart)\n", RELAY_PRE_ON_DELAY_MS);
@@ -199,12 +211,16 @@ void MotorController::begin() {
     digitalWrite(pinREN, LOW);
     digitalWrite(pinLEN, LOW);
     
-    // INA219 initialisieren
+    // INA219 initialisieren (nur wenn aktiviert)
+    #if INA219_ENABLED
     if (!ina219->begin()) {
         Serial.printf("Motor %d: INA219 (0x%02X) nicht gefunden!\n", id, inaAddress);
     } else {
         Serial.printf("Motor %d: INA219 (0x%02X) initialisiert\n", id, inaAddress);
     }
+    #else
+    Serial.printf("Motor %d: INA219 deaktiviert (kein Überstromschutz)\n", id);
+    #endif
     
     Serial.printf("Motor %d: Initialisiert\n", id);
     
@@ -273,6 +289,12 @@ void MotorController::applyMotorControl(MotorDirection dir) {
 }
 
 void MotorController::checkCurrent() {
+    #if !INA219_ENABLED
+    // Kein Stromsensor - nichts prüfen
+    currentCurrent_mA = 0.0;
+    return;
+    #endif
+    
     currentCurrent_mA = ina219->getCurrent_mA();
     
     // INA219 kann negative Werte liefern (Stromrichtung!)
