@@ -92,6 +92,21 @@
 #define SOFT_START_MAX_PWM 255
 #define SOFT_START_STEP_INTERVAL 50
 
+// ===== LED-Feedback =====
+#define LED_FEEDBACK_PIN 2             // GPIO für Feedback-LED
+#define LED_OK_DURATION_MS 1000        // LED an für 1 Sekunde bei OK
+#define LED_ERROR_BLINK_COUNT 3        // Anzahl Blinks bei Fehler
+#define LED_ERROR_BLINK_MS 160         // Blink-Zeit an/aus in ms
+#define LED_ACTIVE_HIGH true           // true = HIGH schaltet LED an
+
+// ===== Tastenerkennung (Erweitert) =====
+#define KEYPAD_EARLY_CHECK_COUNT 10    // Prüfung nach 10 Messungen
+#define KEYPAD_EARLY_GUETE 85.0        // Mindest-Güte für frühe Erkennung (%)
+#define KEYPAD_LOCK_MIN 25             // Mindest-Sperrzeit nach Erkennung (Messungen)
+#define KEYPAD_LOCK_MAX 100            // Max Sperrzeit nach Erkennung (Messungen)
+#define KEYPAD_MAX_ATTEMPTS 100        // Max Messungen bevor Fehler
+#define KEYPAD_FINAL_GUETE 75.0        // Mindest-Güte nach 100 Messungen (%)
+
 // ===== EEPROM =====
 #define PREFS_NAMESPACE "velux"
 

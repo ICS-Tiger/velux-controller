@@ -1,7 +1,85 @@
 #include "button_handler.h"
 #include "config.h"
 
-// ===== AnalogKeypad (Verbesserte Mehrfach-Messung mit Güteprüfung - NON-BLOCKING) =====
+// ===== LedFeedback (Non-blocking LED-Steuerung) =====
+
+LedFeedback::LedFeedback(uint8_t ledPin, bool isActiveHigh) {
+    pin = ledPin;
+    activeHigh = isActiveHigh;
+    state = LED_IDLE;
+    startTime = 0;
+    blinkCount = LED_ERROR_BLINK_COUNT;
+    currentBlink = 0;
+    ledOn = false;
+}
+
+void LedFeedback::begin() {
+    pinMode(pin, OUTPUT);
+    setLed(false);
+    Serial.printf("✓ LED-Feedback initialisiert auf GPIO %d\n", pin);
+}
+
+void LedFeedback::setLed(bool on) {
+    ledOn = on;
+    if (activeHigh) {
+        digitalWrite(pin, on ? HIGH : LOW);
+    } else {
+        digitalWrite(pin, on ? LOW : HIGH);
+    }
+}
+
+void LedFeedback::showOK() {
+    state = LED_OK;
+    startTime = millis();
+    setLed(true);
+    if (Serial) Serial.println("LED: OK (1s an)");
+}
+
+void LedFeedback::showError() {
+    state = LED_ERROR_BLINK;
+    startTime = millis();
+    currentBlink = 0;
+    blinkCount = LED_ERROR_BLINK_COUNT;
+    setLed(true);
+    if (Serial) Serial.println("LED: Fehler (3x blinken)");
+}
+
+bool LedFeedback::isBusy() {
+    return state != LED_IDLE;
+}
+
+void LedFeedback::loop() {
+    if (state == LED_IDLE) return;
+    
+    unsigned long elapsed = millis() - startTime;
+    
+    if (state == LED_OK) {
+        // LED für LED_OK_DURATION_MS an
+        if (elapsed >= LED_OK_DURATION_MS) {
+            setLed(false);
+            state = LED_IDLE;
+        }
+    }
+    else if (state == LED_ERROR_BLINK) {
+        // Blink-Zyklus: LED_ERROR_BLINK_MS an, LED_ERROR_BLINK_MS aus
+        int cycleTime = LED_ERROR_BLINK_MS * 2;  // Ein kompletter An/Aus-Zyklus
+        int cyclePos = elapsed % cycleTime;
+        
+        bool shouldBeOn = (cyclePos < LED_ERROR_BLINK_MS);
+        
+        if (shouldBeOn != ledOn) {
+            setLed(shouldBeOn);
+        }
+        
+        // Nach blinkCount Zyklen beenden
+        if (elapsed >= (unsigned long)(blinkCount * cycleTime)) {
+            setLed(false);
+            state = LED_IDLE;
+        }
+    }
+}
+
+// ===== AnalogKeypad (Verbesserte Mehrfach-Messung mit früher Erkennung - NON-BLOCKING) =====
 
 AnalogKeypad::AnalogKeypad(uint8_t adcPin) {
     pin = adcPin;
@@ -12,6 +90,13 @@ AnalogKeypad::AnalogKeypad(uint8_t adcPin) {
     summe = 0;
     lastReadTime = 0;
     debugOutput = true;
+    
+    // Neue Member initialisieren
+    locked = false;
+    lockCounter = 0;
+    erkanntesTaste = -1;
+    earlyDetected = false;
+    lastResult = KEYPAD_NO_KEY;
     
     // Standard-Kalibrierung (deine ermittelten Werte)
     kalibrierung = "1:4095,2:3697,3:3202,4:2864,5:2412,6:2250,7:2114,8:1986,9:1758,10:1672,11:1593,12:1512,13:1373,14:1072,15:869,16:729";
@@ -70,8 +155,15 @@ void AnalogKeypad::setCalibration(const String& calibration) {
 }
 
 int AnalogKeypad::berechneTaste() {
-    // Mindestens KEYPAD_MIN_MESSUNGEN erforderlich
-    if (anzahlMessungen < KEYPAD_MIN_MESSUNGEN) {
+    float guete;
+    return berechneTasteMitGuete(&guete);
+}
+
+int AnalogKeypad::berechneTasteMitGuete(float* gueteOut) {
+    *gueteOut = 0.0;
+    
+    // Mindestens ein paar Messungen erforderlich
+    if (anzahlMessungen < 3) {
         if (debugOutput) Serial.println("Keypad: Zu wenige Messwerte!");
         return -1;
     }
@@ -99,23 +191,7 @@ int AnalogKeypad::berechneTaste() {
     
     int mittelwertBereinigt = summeBereinigt / anzahlGueltig;
     float guete = (anzahlGueltig / (float)anzahlMessungen) * 100.0;
-    
-    // Debug-Ausgabe
-    if (debugOutput) {
-        Serial.print("Keypad: Messungen: ");
-        Serial.print(anzahlMessungen);
-        Serial.print(" | Wert: ");
-        Serial.print(mittelwertBereinigt);
-        Serial.print(" | Güte: ");
-        Serial.print(guete, 1);
-        Serial.print("%");
-    }
-    
-    // Güte prüfen
-    if (guete < KEYPAD_MIN_GUETE) {
-        if (debugOutput) Serial.println(" -> Güte zu schlecht!");
-        return -1;
-    }
+    *gueteOut = guete;
     
     // Nächstgelegene Taste finden
     int naechsteTaste = -1;
@@ -130,10 +206,15 @@ int AnalogKeypad::berechneTaste() {
         }
     }
     
+    // Debug-Ausgabe
     if (debugOutput) {
-        Serial.print(" | Abstand: ");
-        Serial.print(kleinsterAbstand);
-        Serial.print(" -> Taste ");
+        Serial.print("Keypad: Messungen: ");
+        Serial.print(anzahlMessungen);
+        Serial.print(" | Wert: ");
+        Serial.print(mittelwertBereinigt);
+        Serial.print(" | Güte: ");
+        Serial.print(guete, 1);
+        Serial.print("% | Taste: ");
         Serial.println(naechsteTaste);
     }
     
@@ -145,11 +226,36 @@ int AnalogKeypad::loop() {
     
     // Non-blocking: Nur alle KEYPAD_MESS_INTERVAL ms messen
     if (now - lastReadTime < KEYPAD_MESS_INTERVAL) {
-        return -1;
+        return KEYPAD_NO_KEY;
     }
     lastReadTime = now;
     
     int currentValue = analogRead(pin);
+    
+    // === Sperr-Modus nach früher Erkennung ===
+    if (locked) {
+        if (currentValue > KEYPAD_THRESHOLD) {
+            lockCounter++;
+            // Nach KEYPAD_LOCK_MAX Messungen entsperren
+            if (lockCounter >= KEYPAD_LOCK_MAX) {
+                locked = false;
+                if (debugOutput) Serial.println("Keypad: Sperre aufgehoben (max)");
+            }
+            return KEYPAD_LOCKED;
+        } else {
+            // Taste losgelassen während Sperre
+            unterSchwellwert++;
+            if (unterSchwellwert >= KEYPAD_RELEASE_COUNT && lockCounter >= KEYPAD_LOCK_MIN) {
+                // Mindest-Sperrzeit erreicht und Taste losgelassen
+                locked = false;
+                if (debugOutput) Serial.println("Keypad: Sperre aufgehoben (losgelassen)");
+                unterSchwellwert = 0;
+            }
+            return KEYPAD_LOCKED;
+        }
+    }
+    
+    // === Normale Messung ===
     
     // Taste wurde gedrückt (über Schwellwert)
     if (currentValue > KEYPAD_THRESHOLD) {
@@ -159,6 +265,8 @@ int AnalogKeypad::loop() {
             anzahlMessungen = 0;
             unterSchwellwert = 0;
             summe = 0;
+            earlyDetected = false;
+            erkanntesTaste = -1;
         }
         
         // Messwert aufnehmen
@@ -169,7 +277,79 @@ int AnalogKeypad::loop() {
         }
         unterSchwellwert = 0;  // Reset Counter
         
-        return -1;  // Noch in Messung
+        // === Frühe Prüfung nach KEYPAD_EARLY_CHECK_COUNT Messungen ===
+        if (!earlyDetected && anzahlMessungen >= KEYPAD_EARLY_CHECK_COUNT) {
+            float guete = 0;
+            int taste = berechneTasteMitGuete(&guete);
+            
+            if (taste >= 0 && guete >= KEYPAD_EARLY_GUETE) {
+                // Frühe Erkennung erfolgreich!
+                earlyDetected = true;
+                erkanntesTaste = taste;
+                locked = true;
+                lockCounter = 0;
+                
+                if (debugOutput) {
+                    Serial.print("Keypad: Frühe Erkennung! Taste ");
+                    Serial.print(taste);
+                    Serial.print(" mit Güte ");
+                    Serial.print(guete, 1);
+                    Serial.println("%");
+                }
+                
+                // Reset für nächste Messung
+                measuring = false;
+                anzahlMessungen = 0;
+                summe = 0;
+                lastResult = KEYPAD_NO_KEY;  // OK-Ergebnis
+                
+                return taste;  // Taste zurückgeben
+            }
+        }
+        
+        // === Fehlerprüfung nach KEYPAD_MAX_ATTEMPTS Messungen ===
+        if (anzahlMessungen >= KEYPAD_MAX_ATTEMPTS) {
+            float guete = 0;
+            int taste = berechneTasteMitGuete(&guete);
+            
+            if (taste >= 0 && guete >= KEYPAD_FINAL_GUETE) {
+                // Späte Erkennung noch OK
+                if (debugOutput) {
+                    Serial.print("Keypad: Späte Erkennung! Taste ");
+                    Serial.print(taste);
+                    Serial.print(" mit Güte ");
+                    Serial.print(guete, 1);
+                    Serial.println("%");
+                }
+                
+                locked = true;
+                lockCounter = 0;
+                measuring = false;
+                anzahlMessungen = 0;
+                summe = 0;
+                lastResult = KEYPAD_NO_KEY;
+                
+                return taste;
+            } else {
+                // Fehler - Güte zu schlecht
+                if (debugOutput) {
+                    Serial.print("Keypad: FEHLER nach ");
+                    Serial.print(anzahlMessungen);
+                    Serial.print(" Messungen. Güte: ");
+                    Serial.print(guete, 1);
+                    Serial.println("%");
+                }
+                
+                measuring = false;
+                anzahlMessungen = 0;
+                summe = 0;
+                lastResult = KEYPAD_ERROR;
+                
+                return KEYPAD_ERROR;  // Fehler-Signal
+            }
+        }
+        
+        return KEYPAD_MEASURING;  // Noch in Messung
     }
     else {
         // Unter Schwellwert
@@ -180,20 +360,34 @@ int AnalogKeypad::loop() {
             if (unterSchwellwert >= KEYPAD_RELEASE_COUNT) {
                 measuring = false;
                 
-                // Taste berechnen
-                int taste = berechneTaste();
+                // Taste berechnen (wenn noch nicht früh erkannt)
+                if (!earlyDetected && anzahlMessungen >= KEYPAD_MIN_MESSUNGEN) {
+                    float guete = 0;
+                    int taste = berechneTasteMitGuete(&guete);
+                    
+                    // Reset für nächste Messung
+                    anzahlMessungen = 0;
+                    unterSchwellwert = 0;
+                    summe = 0;
+                    
+                    if (taste >= 0 && guete >= KEYPAD_MIN_GUETE) {
+                        lastResult = KEYPAD_NO_KEY;
+                        return taste;
+                    } else {
+                        lastResult = KEYPAD_ERROR;
+                        return KEYPAD_ERROR;
+                    }
+                }
                 
                 // Reset für nächste Messung
                 anzahlMessungen = 0;
                 unterSchwellwert = 0;
                 summe = 0;
-                
-                return taste;
             }
         }
     }
     
-    return -1;
+    return KEYPAD_NO_KEY;
 }
 
 // ===== RFReceiver =====
@@ -338,11 +532,13 @@ int RFReceiver::loop() {
 
 TaskHandle_t ButtonHandler::keypadTaskHandle = nullptr;
 QueueHandle_t ButtonHandler::keyQueue = nullptr;
+QueueHandle_t ButtonHandler::ledQueue = nullptr;
 ButtonHandler* ButtonHandler::instance = nullptr;
 
 ButtonHandler::ButtonHandler() {
     keypad = new AnalogKeypad(KEYPAD_PIN);
     rfReceiver = new RFReceiver();
+    ledFeedback = new LedFeedback(LED_FEEDBACK_PIN, LED_ACTIVE_HIGH);
     instance = this;
 }
 
@@ -355,10 +551,22 @@ void ButtonHandler::keypadTask(void* parameter) {
     for (;;) {
         int key = kp->loop();
         
-        if (key != -1) {
-            // Taste erkannt -> in Queue senden
+        // Gültige Taste erkannt (>= 0)
+        if (key >= 0) {
+            // Taste in Queue senden
             xQueueSend(keyQueue, &key, 0);
+            
+            // LED-OK Signal senden
+            int ledCmd = 1;  // 1 = OK
+            xQueueSend(ledQueue, &ledCmd, 0);
         }
+        // Fehler erkannt
+        else if (key == KEYPAD_ERROR) {
+            // LED-Fehler Signal senden
+            int ledCmd = 2;  // 2 = Error
+            xQueueSend(ledQueue, &ledCmd, 0);
+        }
+        // KEYPAD_MEASURING, KEYPAD_LOCKED, KEYPAD_NO_KEY ignorieren
         
         vTaskDelay(1);  // Minimal delay für Watchdog
     }
@@ -367,9 +575,13 @@ void ButtonHandler::keypadTask(void* parameter) {
 void ButtonHandler::begin() {
     keypad->begin();
     rfReceiver->begin();
+    ledFeedback->begin();
     
     // Queue für Tastenübertragung erstellen (max 10 Tasten puffern)
     keyQueue = xQueueCreate(10, sizeof(int));
+    
+    // Queue für LED-Befehle erstellen
+    ledQueue = xQueueCreate(5, sizeof(int));
     
     // Keypad-Task auf Core 0 starten (Core 1 = Arduino loop)
     xTaskCreatePinnedToCore(
@@ -382,10 +594,23 @@ void ButtonHandler::begin() {
         0                     // Core 0 (nicht Core 1 wo loop() läuft)
     );
     
-    Serial.println("✓ Button Handler initialisiert (Keypad auf Core 0, RF auf Core 1)");
+    Serial.println("✓ Button Handler initialisiert (Keypad auf Core 0, RF auf Core 1, LED-Feedback aktiv)");
 }
 
 void ButtonHandler::loop() {
+    // LED-Feedback verarbeiten (non-blocking)
+    ledFeedback->loop();
+    
+    // LED-Befehle aus Queue verarbeiten
+    int ledCmd = 0;
+    if (xQueueReceive(ledQueue, &ledCmd, 0) == pdTRUE) {
+        if (ledCmd == 1) {
+            ledFeedback->showOK();
+        } else if (ledCmd == 2) {
+            ledFeedback->showError();
+        }
+    }
+    
     int key = -1;
     
     // Keypad: Taste aus Queue lesen (non-blocking)
